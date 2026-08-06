@@ -1,0 +1,25 @@
+﻿import torch
+from PIL import Image
+import numpy as np
+
+# TERAFAC - mock inference entrypoint
+# Usage: python inference.py --image path/to/img.png --checkpoint best.pt
+
+def load_checkpoint(path: str):
+    return torch.load(path, map_location="cpu")
+
+def predict(image_path: str, model):
+    img = np.array(Image.open(image_path).convert("RGB"))
+    # placeholder: return zeros mask of same HxW
+    return np.zeros(img.shape[:2], dtype=np.uint8)
+
+if __name__ == "__main__":
+    import argparse
+    p = argparse.ArgumentParser()
+    p.add_argument("--image", required=True)
+    p.add_argument("--checkpoint", default="best.pt")
+    args = p.parse_args()
+    model = load_checkpoint(args.checkpoint)
+    mask = predict(args.image, model)
+    Image.fromarray(mask).save("pred_mask.png")
+    print("saved pred_mask.png")

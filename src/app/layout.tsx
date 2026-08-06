@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import "./globals.css";
+import { MswStarter } from "@/components/MswStarter";
 
 export const metadata: Metadata = {
   title: "TERAFAC — Cloud Training UI",
@@ -14,7 +15,7 @@ export default function RootLayout({
   return (
     <html lang="en" className="dark">
       <body className="min-h-screen bg-background font-sans text-foreground antialiased">
-        {children}
+        <MswStarter>{children}</MswStarter>
       </body>
     </html>
   );
