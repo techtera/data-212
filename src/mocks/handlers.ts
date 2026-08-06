@@ -97,6 +97,9 @@ function autoAdvance(j: MockJob) {
   if (now - j.last_transition_at < 4000) return;
   if (j.stage === "rejected" || j.stage === "error" || j.stage === "done") return;
 
+  // PAUSE at user-interaction stages - only advance via explicit POST calls
+  if (j.stage === "awaiting_annotation" || j.stage === "awaiting_approval") return;
+
   const nextIdx = STAGE_FLOW.indexOf(
     j.stage as (typeof STAGE_FLOW)[number]
   ) + 1;
@@ -246,8 +249,9 @@ export const handlers = [
     j.annotations_uploaded = true;
     j.unannotated_count = 0;
     j.annotated_count = INITIAL_FLAGGED.length;
-    j.stage = "awaiting_approval";
+    j.stage = "training";
     j.last_transition_at = Date.now();
+    j.epoch = 1;
     const body: AnnotationsResponse = { ok: true, stage: j.stage };
     return HttpResponse.json(body);
   }),

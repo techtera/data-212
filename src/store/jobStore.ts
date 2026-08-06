@@ -6,6 +6,10 @@ export interface CocoEntry {
   image_id: string;
   segmentation: number[][];
   saved_at: string;
+  category_id: number;
+  bbox: [number, number, number, number];
+  area: number;
+  is_crowd: number;
 }
 
 export interface JobStoreState {
