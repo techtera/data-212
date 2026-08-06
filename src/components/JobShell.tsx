@@ -9,6 +9,7 @@ import {
 import { StageBanner } from "@/components/StageBanner";
 import { useJobPolling } from "@/lib/polling";
 import { useJobStore } from "@/store/jobStore";
+import { useNavStore } from "@/store/navStore";
 
 import { JobsTab } from "@/components/tabs/JobsTab";
 import { TrainTab } from "@/components/tabs/TrainTab";
@@ -32,6 +33,8 @@ const TABS = [
 
 export function JobShell() {
   const activeJobId = useJobStore((s) => s.activeJobId);
+  const activeTab = useNavStore((s) => s.activeTab);
+  const setActiveTab = useNavStore((s) => s.setActiveTab);
   useJobPolling(activeJobId);
 
   return (
@@ -45,7 +48,11 @@ export function JobShell() {
 
       <StageBanner />
 
-      <Tabs defaultValue="jobs" className="w-full">
+      <Tabs
+        value={activeTab}
+        onValueChange={(v) => setActiveTab(v as typeof activeTab)}
+        className="w-full"
+      >
         <TabsList className="flex flex-wrap">
           {TABS.map((t) => (
             <TabsTrigger key={t.value} value={t.value}>

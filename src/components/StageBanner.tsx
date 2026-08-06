@@ -4,6 +4,7 @@ import { cn } from "@/lib/utils";
 import { useJobStore } from "@/store/jobStore";
 import type { Stage } from "@/types/job";
 
+
 interface BannerSpec {
   text: (s: ReturnType<typeof useJobStore.getState>) => string;
   accent: "blue" | "amber" | "green" | "red" | "muted" | "pulse-green";
