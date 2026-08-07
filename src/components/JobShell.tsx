@@ -1,5 +1,6 @@
 "use client";
 
+import * as React from "react";
 import {
   Tabs,
   TabsContent,
@@ -10,6 +11,7 @@ import { StageBanner } from "@/components/StageBanner";
 import { useJobPolling } from "@/lib/polling";
 import { useJobStore } from "@/store/jobStore";
 import { useNavStore } from "@/store/navStore";
+import { ApprovalModal } from "@/components/ApprovalModal";
 
 import { JobsTab } from "@/components/tabs/JobsTab";
 import { TrainTab } from "@/components/tabs/TrainTab";
@@ -33,9 +35,27 @@ const TABS = [
 
 export function JobShell() {
   const activeJobId = useJobStore((s) => s.activeJobId);
+  const jobStage = useJobStore((s) => s.job?.stage ?? null);
   const activeTab = useNavStore((s) => s.activeTab);
   const setActiveTab = useNavStore((s) => s.setActiveTab);
+  const [showApproval, setShowApproval] = React.useState(false);
+
   useJobPolling(activeJobId);
+
+  // Auto-open approval modal when stage becomes awaiting_approval
+  React.useEffect(() => {
+    if (jobStage === "awaiting_approval" && activeJobId) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setShowApproval(true);
+    } else {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setShowApproval(false);
+    }
+  }, [jobStage, activeJobId]);
+
+  const handleApprovalClose = () => {
+    setShowApproval(false);
+  };
 
   return (
     <div className="mx-auto w-full max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
@@ -70,6 +90,12 @@ export function JobShell() {
           );
         })}
       </Tabs>
+
+      <ApprovalModal
+        open={showApproval}
+        onClose={handleApprovalClose}
+        jobId={activeJobId ?? ""}
+      />
     </div>
   );
 }
