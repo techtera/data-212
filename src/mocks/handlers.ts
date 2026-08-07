@@ -235,7 +235,7 @@ export const handlers = [
 
   http.get(`${base}/jobs/:id/data-preview`, () => {
     const preview: DataPreviewImage[] = [];
-    for (let i = 1; i <= 8; i++) {
+    for (let i = 1; i <= 32; i++) {
       preview.push({ image_id: String(i), url: `/mock-data/images/${i}.png` });
     }
     return HttpResponse.json(preview);
