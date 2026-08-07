@@ -57,6 +57,9 @@ export function AnnotatorWrapper() {
     currentPolygon: [],
   });
 
+  // Track if user is in edit mode for current image
+  const [isEditing, setIsEditing] = useState(false);
+
   // Fetch saved count from temp folder
   const fetchSavedCount = useCallback(async () => {
     if (!jobId) return;
@@ -292,12 +295,20 @@ export function AnnotatorWrapper() {
 
       if (!res.ok) throw new Error("Failed to save");
 
-      toast.success(`Saved mask for image ${imageId}`);
+      const isNewSave = !savedImages.has(imageId);
+      toast.success(isNewSave ? `Saved mask for image ${imageId}` : `Updated mask for image ${imageId}`);
       setLastSavedIdx(selectedIdx);
       
       // Optimistically update savedImages
-      setSavedImages(prev => new Set(prev).add(imageId));
-      setSavedCount(prev => prev + 1);
+      if (isNewSave) {
+        setSavedImages(prev => new Set(prev).add(imageId));
+        setSavedCount(prev => prev + 1);
+      }
+      
+      // Exit edit mode if we were editing
+      if (isEditing) {
+        setIsEditing(false);
+      }
       
       // Clear polygons for this image so user can draw for next image
       setAnnotationState({ polygons: [], currentPolygon: [] });
@@ -307,7 +318,7 @@ export function AnnotatorWrapper() {
     } finally {
       setSaving(false);
     }
-  }, [jobId, images, selectedIdx, annotationState.polygons, annotationState.currentPolygon]);
+  }, [jobId, images, selectedIdx, annotationState.polygons, annotationState.currentPolygon, savedImages, isEditing]);
 
   // Start training - call POST /jobs/{id}/annotations
   const handleStartTraining = useCallback(async () => {
@@ -337,6 +348,18 @@ export function AnnotatorWrapper() {
     if (selectedIdx > 0) setSelectedIdx((i) => i - 1);
   }, [selectedIdx]);
 
+  // Edit mode: allow re-annotation of a saved image
+  const handleEdit = useCallback(() => {
+    const imageId = images[selectedIdx]?.id;
+    if (!imageId || !savedImages.has(imageId)) {
+      toast.error("This image hasn't been saved yet");
+      return;
+    }
+    setIsEditing(true);
+    setAnnotationState({ polygons: [], currentPolygon: [] });
+    toast.info("Editing mode — draw new polygons, then click Save Mask to replace");
+  }, [images, selectedIdx, savedImages]);
+
   if (!jobId || images.length === 0) {
     return (
       <Card>
@@ -354,6 +377,7 @@ export function AnnotatorWrapper() {
   }
 
   const currentImage = images[selectedIdx];
+  const isCurrentImageSaved = currentImage && savedImages.has(currentImage.id);
 
   return (
     <Card className="flex flex-col h-[calc(100vh-240px)]">
@@ -416,8 +440,18 @@ export function AnnotatorWrapper() {
           <Button variant="outline" size="sm" onClick={() => setAnnotationState((p) => ({ ...p, polygons: [] }))} disabled={annotationState.polygons.length === 0}>
             Clear All Polygons
           </Button>
+          {isCurrentImageSaved && !isEditing && (
+            <Button variant="outline" size="sm" onClick={handleEdit}>
+              Edit
+            </Button>
+          )}
+          {isEditing && (
+            <Button variant="outline" size="sm" onClick={() => { setIsEditing(false); setAnnotationState({ polygons: [], currentPolygon: [] }); }}>
+              Cancel Edit
+            </Button>
+          )}
           <Button onClick={handleSaveMask} disabled={saving || (annotationState.polygons.length === 0 && annotationState.currentPolygon.length < 3)}>
-            {saving ? "Saving..." : "Save Mask"}
+            {saving ? "Saving..." : isEditing ? "Update Mask" : "Save Mask"}
           </Button>
           {savedCount === total && (
             <Button onClick={handleStartTraining} disabled={training} className="bg-emerald-600 hover:bg-emerald-700">
