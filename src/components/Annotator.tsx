@@ -43,6 +43,7 @@ export function AnnotatorWrapper() {
   const [training, setTraining] = useState(false);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const imgRef = useRef<HTMLImageElement>(null);
+  const previewCanvasRef = useRef<HTMLCanvasElement>(null);
 
   // Click handling: use timeout to distinguish click vs double-click
   const clickTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -157,6 +158,52 @@ export function AnnotatorWrapper() {
         ctx.beginPath();
         ctx.arc(pt.x, pt.y, 4, 0, Math.PI * 2);
         ctx.fill();
+      }
+    }
+  }, [annotationState]);
+
+  // Draw saved annotation on preview canvas (side-by-side view)
+  const drawPreviewCanvas = useCallback(() => {
+    const canvas = previewCanvasRef.current;
+    const img = imgRef.current;
+    if (!canvas || !img) return;
+
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+
+    const dpr = window.devicePixelRatio || 1;
+    const maxWidth = canvas.parentElement?.clientWidth ?? 400;
+    const scale = Math.min(1, maxWidth / img.width);
+    const displayWidth = img.width * scale;
+    const displayHeight = img.height * scale;
+
+    canvas.width = displayWidth * dpr;
+    canvas.height = displayHeight * dpr;
+    canvas.style.width = `${displayWidth}px`;
+    canvas.style.height = `${displayHeight}px`;
+
+    ctx.scale(dpr, dpr);
+    ctx.clearRect(0, 0, displayWidth, displayHeight);
+    ctx.drawImage(img, 0, 0, displayWidth, displayHeight);
+
+    // Draw saved polygons (from temp folder) - green overlay
+    // For now, we'll use the current annotationState.polygons if available
+    // In a full implementation, this would fetch from the saved temp file
+    if (annotationState.polygons.length > 0) {
+      ctx.strokeStyle = "#22c55e";
+      ctx.lineWidth = 2;
+      ctx.fillStyle = "rgba(34, 197, 94, 0.15)";
+
+      for (const poly of annotationState.polygons) {
+        if (poly.length < 2) continue;
+        ctx.beginPath();
+        ctx.moveTo(poly[0].x * (displayWidth / (imgRef.current?.width || 1)), poly[0].y * (displayHeight / (imgRef.current?.height || 1)));
+        for (let i = 1; i < poly.length; i++) {
+          ctx.lineTo(poly[i].x * (displayWidth / (imgRef.current?.width || 1)), poly[i].y * (displayHeight / (imgRef.current?.height || 1)));
+        }
+        ctx.closePath();
+        ctx.fill();
+        ctx.stroke();
       }
     }
   }, [annotationState]);
