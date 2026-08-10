@@ -64,6 +64,9 @@ export function AnnotatorWrapper() {
   // Track if user is in edit mode for current image
   const [isEditing, setIsEditing] = useState(false);
 
+  // Confirm dialog state for reset
+  const [showResetConfirm, setShowResetConfirm] = useState(false);
+
   // Fetch saved count from temp folder
   const fetchSavedCount = useCallback(async () => {
     if (!jobId) return;
@@ -416,6 +419,45 @@ export function AnnotatorWrapper() {
     toast.info("Editing mode — draw new polygons, then click Save Mask to replace");
   }, [images, selectedIdx, savedImages]);
 
+  // Reset all annotations (with confirmation)
+  const handleReset = useCallback(() => {
+    setShowResetConfirm(true);
+  }, []);
+
+  const handleResetConfirm = useCallback(async () => {
+    if (!jobId) {
+      setShowResetConfirm(false);
+      return;
+    }
+
+    try {
+      // Delete ALL mask files from disk (no imageId param) so the next poll
+      // doesn't resurrect them
+      const res = await fetch(`/api/save-mask?jobId=${jobId}`, {
+        method: "DELETE",
+      });
+      if (!res.ok) throw new Error("Failed to delete mask files");
+    } catch (err) {
+      toast.error(`Failed to delete masks: ${String(err)}`);
+      // still clear local state and close dialog
+    }
+
+    // Clear the entire saved polygons map
+    setSavedPolygonsMap({});
+    // Clear all saved images and reset count to 0
+    setSavedImages(new Set());
+    setSavedCount(0);
+    // Clear local annotation state for the currently selected image
+    setAnnotationState({ polygons: [], currentPolygon: [] });
+    setIsEditing(false);
+    setShowResetConfirm(false);
+    toast.success("All annotations reset");
+  }, [jobId]);
+
+  const handleResetCancel = useCallback(() => {
+    setShowResetConfirm(false);
+  }, []);
+
   if (!jobId || images.length === 0) {
     return (
       <Card>
@@ -509,8 +551,8 @@ export function AnnotatorWrapper() {
           <Button variant="outline" size="sm" onClick={() => setAnnotationState((p) => ({ ...p, currentPolygon: [] }))} disabled={annotationState.currentPolygon.length === 0}>
             Clear Current Polygon
           </Button>
-          <Button variant="outline" size="sm" onClick={() => setAnnotationState((p) => ({ ...p, polygons: [] }))} disabled={annotationState.polygons.length === 0}>
-            Clear All Polygons
+          <Button variant="outline" size="sm" onClick={handleReset} disabled={annotationState.polygons.length === 0 && annotationState.currentPolygon.length === 0 && !isCurrentImageSaved}>
+            Reset
           </Button>
           {isCurrentImageSaved && !isEditing && (
             <Button variant="outline" size="sm" onClick={handleEdit}>
@@ -525,6 +567,27 @@ export function AnnotatorWrapper() {
           <Button onClick={handleSaveMask} disabled={saving || (annotationState.polygons.length === 0 && annotationState.currentPolygon.length < 3)}>
             {saving ? "Saving..." : isEditing ? "Update Mask" : "Save Mask"}
           </Button>
+
+          {/* Reset Confirmation Dialog */}
+          {showResetConfirm && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center" role="dialog" aria-modal="true">
+              <div className="fixed inset-0 bg-black/50" onClick={handleResetCancel} aria-hidden="true" />
+              <div className="relative z-50 w-full max-w-md rounded-lg bg-popover p-6 shadow-lg border">
+                <h3 className="text-lg font-semibold mb-2">Reset Annotations?</h3>
+                <p className="text-sm text-muted-foreground mb-4">
+                  This will clear all saved and current annotations for this image. This action cannot be undone.
+                </p>
+                <div className="flex justify-end gap-2">
+                  <Button variant="outline" size="sm" onClick={handleResetCancel}>
+                    No
+                  </Button>
+                  <Button variant="destructive" size="sm" onClick={handleResetConfirm}>
+                    Yes
+                  </Button>
+                </div>
+              </div>
+            </div>
+          )}
           {savedCount === total && (
             <Button onClick={handleStartTraining} disabled={training} className="bg-emerald-600 hover:bg-emerald-700">
               {training ? "Starting..." : "Start Training"}
