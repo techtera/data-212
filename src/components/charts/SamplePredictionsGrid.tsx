@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import { cn } from "@/lib/utils";
 import type { SamplePrediction } from "@/types/metrics";
 
@@ -18,33 +19,39 @@ export function SamplePredictionsGrid({ predictions, className }: SamplePredicti
       {predictions.map((pred, i) => (
         <div key={i} className="grid grid-cols-3 gap-3">
           <figure className="relative aspect-square rounded border overflow-hidden bg-zinc-900">
-            <img
+            <Image
               src={pred.image_url}
               alt={`Input ${i + 1}`}
               className="w-full h-full object-cover"
               loading="lazy"
+              width={300}
+              height={300}
             />
             <figcaption className="absolute bottom-0 left-0 right-0 px-2 py-1 bg-black/60 text-xs text-center text-white">
               Input
             </figcaption>
           </figure>
           <figure className="relative aspect-square rounded border overflow-hidden bg-zinc-900">
-            <img
+            <Image
               src={pred.pred_mask_url}
               alt={`Predicted mask ${i + 1}`}
               className="w-full h-full object-cover"
               loading="lazy"
+              width={300}
+              height={300}
             />
             <figcaption className="absolute bottom-0 left-0 right-0 px-2 py-1 bg-black/60 text-xs text-center text-white">
               Predicted Mask
             </figcaption>
           </figure>
           <figure className="relative aspect-square rounded border overflow-hidden bg-zinc-900">
-            <img
+            <Image
               src={pred.gt_mask_url}
               alt={`Ground truth mask ${i + 1}`}
               className="w-full h-full object-cover"
               loading="lazy"
+              width={300}
+              height={300}
             />
             <figcaption className="absolute bottom-0 left-0 right-0 px-2 py-1 bg-black/60 text-xs text-center text-white">
               Ground Truth

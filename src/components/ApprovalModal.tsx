@@ -33,7 +33,6 @@ export function ApprovalModal({ open, onClose, jobId }: ApprovalModalProps) {
       // Mock data
       // eslint-disable-next-line react-hooks/set-state-in-effect
       setFindings("Research agent reviewed the dataset and model config. No major safety concerns detected. Confidence: high.");
-      // eslint-disable-next-line react-hooks/set-state-in-effect
       setRiskTier("low");
     }
   }, [open]);

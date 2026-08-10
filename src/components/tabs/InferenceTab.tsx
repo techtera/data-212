@@ -33,7 +33,6 @@ export function InferenceTab() {
       // eslint-disable-next-line react-hooks/set-state-in-effect
       fetchInference();
     } else {
-      // eslint-disable-next-line react-hooks/set-state-in-effect
       setInference(null);
     }
   }, [activeJobId, job?.stage, fetchInference]);

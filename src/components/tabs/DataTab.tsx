@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import { useCallback, useEffect, useState } from "react";
 import { api } from "@/lib/api";
 import { useJobStore } from "@/store/jobStore";
@@ -63,11 +64,13 @@ export function DataTab() {
           >
             {images.map((img) => (
               <figure key={img.image_id} className="relative aspect-square rounded border overflow-hidden bg-zinc-900">
-                <img
+                <Image
                   src={img.url}
                   alt={`Preview ${img.image_id}`}
                   className="w-full h-full object-cover transition-opacity duration-200 hover:opacity-80"
                   loading="lazy"
+                  width={200}
+                  height={200}
                 />
                 <figcaption className="absolute bottom-0 left-0 right-0 px-1 py-0.5 bg-black/60 text-[10px] text-white truncate">
                   {img.image_id}

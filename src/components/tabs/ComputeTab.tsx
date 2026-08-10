@@ -41,11 +41,9 @@ export function ComputeTab() {
       // eslint-disable-next-line react-hooks/set-state-in-effect
       setCompute(null);
       historyRef.current = [];
-      // eslint-disable-next-line react-hooks/set-state-in-effect
       setHistory([]);
       return;
     }
-    // eslint-disable-next-line react-hooks/set-state-in-effect
     fetchCompute();
     timerRef.current = setInterval(fetchCompute, 3000);
     return () => {

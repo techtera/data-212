@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { api } from "@/lib/api";
 import { useJobStore } from "@/store/jobStore";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -22,7 +22,7 @@ export function ResultsTab() {
   const [results, setResults] = useState<ResultsResponse | null>(null);
   const [loading, setLoading] = useState(false);
 
-  const fetchResults = async () => {
+  const fetchResults = useCallback(async () => {
     if (!activeJobId) return;
     setLoading(true);
     try {
@@ -33,7 +33,7 @@ export function ResultsTab() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [activeJobId]);
 
   useEffect(() => {
     if (job?.stage !== "done") {
@@ -42,7 +42,7 @@ export function ResultsTab() {
       return;
     }
     fetchResults();
-  }, [activeJobId, job?.stage]);
+  }, [activeJobId, job?.stage, fetchResults]);
 
   if (job?.stage !== "done") {
     return (

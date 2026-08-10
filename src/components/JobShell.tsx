@@ -48,7 +48,6 @@ export function JobShell() {
       // eslint-disable-next-line react-hooks/set-state-in-effect
       setShowApproval(true);
     } else {
-      // eslint-disable-next-line react-hooks/set-state-in-effect
       setShowApproval(false);
     }
   }, [jobStage, activeJobId]);
