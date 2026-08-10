@@ -61,9 +61,6 @@ export function AnnotatorWrapper() {
     currentPolygon: [],
   });
 
-  // Track if user is in edit mode for current image
-  const [isEditing, setIsEditing] = useState(false);
-
   // Confirm dialog state for reset
   const [showResetConfirm, setShowResetConfirm] = useState(false);
 
@@ -364,11 +361,6 @@ export function AnnotatorWrapper() {
         setSavedCount(prev => prev + 1);
       }
       
-      // Exit edit mode if we were editing
-      if (isEditing) {
-        setIsEditing(false);
-      }
-      
       // Clear polygons for this image so user can draw for next image
       setAnnotationState({ polygons: [], currentPolygon: [] });
       
@@ -377,7 +369,7 @@ export function AnnotatorWrapper() {
     } finally {
       setSaving(false);
     }
-  }, [jobId, images, selectedIdx, annotationState.polygons, annotationState.currentPolygon, savedImages, isEditing]);
+  }, [jobId, images, selectedIdx, annotationState.polygons, annotationState.currentPolygon, savedImages]);
 
   // Start training - call POST /jobs/{id}/annotations
   const handleStartTraining = useCallback(async () => {
@@ -406,18 +398,6 @@ export function AnnotatorWrapper() {
   const handlePrev = useCallback(() => {
     if (selectedIdx > 0) setSelectedIdx((i) => i - 1);
   }, [selectedIdx]);
-
-  // Edit mode: allow re-annotation of a saved image
-  const handleEdit = useCallback(() => {
-    const imageId = images[selectedIdx]?.id;
-    if (!imageId || !savedImages.has(imageId)) {
-      toast.error("This image hasn't been saved yet");
-      return;
-    }
-    setIsEditing(true);
-    setAnnotationState({ polygons: [], currentPolygon: [] });
-    toast.info("Editing mode — draw new polygons, then click Save Mask to replace");
-  }, [images, selectedIdx, savedImages]);
 
   // Reset all annotations (with confirmation)
   const handleReset = useCallback(() => {
@@ -449,7 +429,6 @@ export function AnnotatorWrapper() {
     setSavedCount(0);
     // Clear local annotation state for the currently selected image
     setAnnotationState({ polygons: [], currentPolygon: [] });
-    setIsEditing(false);
     setShowResetConfirm(false);
     toast.success("All annotations reset");
   }, [jobId]);
@@ -554,18 +533,8 @@ export function AnnotatorWrapper() {
           <Button variant="outline" size="sm" onClick={handleReset} disabled={annotationState.polygons.length === 0 && annotationState.currentPolygon.length === 0 && !isCurrentImageSaved}>
             Reset
           </Button>
-          {isCurrentImageSaved && !isEditing && (
-            <Button variant="outline" size="sm" onClick={handleEdit}>
-              Edit
-            </Button>
-          )}
-          {isEditing && (
-            <Button variant="outline" size="sm" onClick={() => { setIsEditing(false); setAnnotationState({ polygons: [], currentPolygon: [] }); }}>
-              Cancel Edit
-            </Button>
-          )}
           <Button onClick={handleSaveMask} disabled={saving || (annotationState.polygons.length === 0 && annotationState.currentPolygon.length < 3)}>
-            {saving ? "Saving..." : isEditing ? "Update Mask" : "Save Mask"}
+            {saving ? "Saving..." : "Save Mask"}
           </Button>
 
           {/* Reset Confirmation Dialog */}
