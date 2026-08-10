@@ -53,6 +53,9 @@ export function AnnotatorWrapper() {
   // Per-image saved tracking (from temp folder)
   const [savedImages, setSavedImages] = useState<Set<string>>(new Set());
 
+  // Saved polygons per image for preview
+  const [savedPolygonsMap, setSavedPolygonsMap] = useState<Record<string, PolygonPoint[][]>>({});
+
   const [annotationState, setAnnotationState] = useState<AnnotationState>({
     polygons: [],
     currentPolygon: [],
@@ -186,27 +189,29 @@ export function AnnotatorWrapper() {
     ctx.clearRect(0, 0, displayWidth, displayHeight);
     ctx.drawImage(img, 0, 0, displayWidth, displayHeight);
 
-    // Draw saved polygons (from temp folder) - green overlay
-    // For now, we'll use the current annotationState.polygons if available
-    // In a full implementation, this would fetch from the saved temp file
-    if (annotationState.polygons.length > 0) {
+    // Use saved polygons for current image if available, else current annotationState
+    const currentImage = images[selectedIdx];
+    const savedPolys = currentImage ? savedPolygonsMap[currentImage.id] : null;
+    const polysToDraw = savedPolys && savedPolys.length > 0 ? savedPolys : annotationState.polygons;
+
+    if (polysToDraw.length > 0) {
       ctx.strokeStyle = "#22c55e";
       ctx.lineWidth = 2;
       ctx.fillStyle = "rgba(34, 197, 94, 0.15)";
 
-      for (const poly of annotationState.polygons) {
+      for (const poly of polysToDraw) {
         if (poly.length < 2) continue;
         ctx.beginPath();
-        ctx.moveTo(poly[0].x * (displayWidth / (imgRef.current?.width || 1)), poly[0].y * (displayHeight / (imgRef.current?.height || 1)));
+        ctx.moveTo(poly[0].x * (displayWidth / (img.width || 1)), poly[0].y * (displayHeight / (img.height || 1)));
         for (let i = 1; i < poly.length; i++) {
-          ctx.lineTo(poly[i].x * (displayWidth / (imgRef.current?.width || 1)), poly[i].y * (displayHeight / (imgRef.current?.height || 1)));
+          ctx.lineTo(poly[i].x * (displayWidth / (img.width || 1)), poly[i].y * (displayHeight / (img.height || 1)));
         }
         ctx.closePath();
         ctx.fill();
         ctx.stroke();
       }
     }
-  }, [annotationState]);
+  }, [annotationState, images, selectedIdx, savedPolygonsMap]);
 
   // Keyboard handler
   const handleKeyDown = useCallback((e: KeyboardEvent) => {
@@ -253,12 +258,13 @@ export function AnnotatorWrapper() {
       imgRef.current = img;
       setImageLoaded(true);
       drawCanvas();
+      drawPreviewCanvas();
     };
     img.onerror = () => {
       toast.error("Failed to load image");
       setImageLoaded(true);
     };
-  }, [images, selectedIdx, drawCanvas]);
+  }, [images, selectedIdx, drawCanvas, drawPreviewCanvas]);
 
   const handleCanvasClick = useCallback((e: React.MouseEvent<HTMLCanvasElement>) => {
     if (!imageLoaded) return;
@@ -345,6 +351,9 @@ export function AnnotatorWrapper() {
       const isNewSave = !savedImages.has(imageId);
       toast.success(isNewSave ? `Saved mask for image ${imageId}` : `Updated mask for image ${imageId}`);
       setLastSavedIdx(selectedIdx);
+      
+      // Store polygons for preview
+      setSavedPolygonsMap(prev => ({ ...prev, [imageId]: allPolygons }));
       
       // Optimistically update savedImages
       if (isNewSave) {
@@ -466,18 +475,34 @@ export function AnnotatorWrapper() {
           </span>
         </div>
 
-        <div className="flex-1 min-h-0 border rounded bg-zinc-950 relative" style={{ overflow: "hidden" }}>
-          <canvas
-            ref={canvasRef}
-            onClick={handleCanvasClick}
-            onDoubleClick={handleCanvasDoubleClick}
-            style={{ display: "block", maxWidth: "100%", maxHeight: "100%", cursor: "crosshair" }}
-          />
-          {!imageLoaded && (
-            <div className="absolute inset-0 flex items-center justify-center text-muted-foreground">
-              Loading image...
-            </div>
-          )}
+        <div className="flex-1 min-h-0 flex gap-2">
+          {/* Main annotation canvas */}
+          <div className="flex-1 min-w-0 border rounded bg-zinc-950 relative" style={{ overflow: "hidden" }}>
+            <canvas
+              ref={canvasRef}
+              onClick={handleCanvasClick}
+              onDoubleClick={handleCanvasDoubleClick}
+              style={{ display: "block", maxWidth: "100%", maxHeight: "100%", cursor: "crosshair" }}
+            />
+            {!imageLoaded && (
+              <div className="absolute inset-0 flex items-center justify-center text-muted-foreground">
+                Loading image...
+              </div>
+            )}
+          </div>
+
+          {/* Preview canvas showing saved mask */}
+          <div className="w-1/3 min-w-0 border rounded bg-zinc-950 relative" style={{ overflow: "hidden" }}>
+            <canvas
+              ref={previewCanvasRef}
+              style={{ display: "block", maxWidth: "100%", maxHeight: "100%" }}
+            />
+            {!imageLoaded && (
+              <div className="absolute inset-0 flex items-center justify-center text-muted-foreground text-xs">
+                Preview
+              </div>
+            )}
+          </div>
         </div>
 
         <div className="mt-3 flex items-center justify-end gap-2">
