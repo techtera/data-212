@@ -8,9 +8,11 @@ __pycache__/
 venv/
 .venv/
 
-# ── Secrets ───────────────────────────────────────────────────────────────────
+# ── Secrets — NEVER commit these ─────────────────────────────────────────────
 .env
 .env.local
+firebase-service-account.json
+*.json.key
 
 # ── Tool caches ───────────────────────────────────────────────────────────────
 .pytest_cache/

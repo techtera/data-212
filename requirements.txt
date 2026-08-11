@@ -3,3 +3,4 @@ uvicorn[standard]>=0.30.0
 google-cloud-firestore>=2.19.0
 pydantic-settings>=2.5.0
 python-dotenv>=1.0.0
+firebase-admin>=6.0,<7.0

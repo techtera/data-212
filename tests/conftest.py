@@ -1,10 +1,46 @@
 from __future__ import annotations
 
+import sys
+from unittest.mock import MagicMock, patch
+
 import pytest
 from httpx import ASGITransport, AsyncClient
 
-from src.config import Settings, get_settings
-from src.main import app
+# ── Firebase stub — must happen BEFORE any src.db module is imported ──────────
+#
+# firebase_admin is patched at the top of conftest so that when pytest collects
+# test_crud.py / test_db_jobs.py and Python imports src.db.firebase, the real
+# firebase_admin SDK (and any network call) is never executed.
+#
+# The patch is applied at module scope (not inside a fixture) so it takes effect
+# during the collection phase, before the first test runs.
+
+_mock_firebase_admin = MagicMock()
+_mock_firebase_admin.get_app.side_effect = ValueError("no app")  # triggers initialize_app
+_mock_firebase_admin.initialize_app.return_value = MagicMock()
+_mock_credentials = MagicMock()
+_mock_credentials.Certificate.return_value = MagicMock()
+_mock_firebase_admin.credentials = _mock_credentials
+
+_mock_firestore_module = MagicMock()
+_mock_db_client = MagicMock()
+_mock_firestore_module.client.return_value = _mock_db_client
+_mock_firebase_admin.firestore = _mock_firestore_module
+
+# Patch sys.modules so `import firebase_admin` anywhere returns our mock.
+sys.modules["firebase_admin"] = _mock_firebase_admin
+sys.modules["firebase_admin.credentials"] = _mock_credentials
+sys.modules["firebase_admin.firestore"] = _mock_firestore_module
+
+# Also make the credential file check pass by patching pathlib.Path.exists
+# for the specific firebase init call.
+_path_exists_patch = patch("pathlib.Path.exists", return_value=True)
+_path_exists_patch.start()
+
+# ── Standard fixtures ─────────────────────────────────────────────────────────
+
+from src.config import Settings, get_settings  # noqa: E402
+from src.main import app  # noqa: E402
 
 
 @pytest.fixture
