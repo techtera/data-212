@@ -42,5 +42,10 @@
     "workerDirectory": [
       "public"
     ]
+  },
+  "allowScripts": {
+    "@tailwindcss/oxide@4.1.8": true,
+    "msw@2.8.2": true,
+    "unrs-resolver@1.12.2": true
   }
 }
