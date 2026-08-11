@@ -8,6 +8,7 @@ from fastapi import FastAPI
 
 from src.middleware.cors import apply_cors
 from src.routes.health import router as health_router
+from src.routes.job_action_routes import router as job_action_router
 from src.routes.job_routes import router as job_router
 
 logging.basicConfig(
@@ -39,6 +40,7 @@ def create_app() -> FastAPI:
     # ── Routers ───────────────────────────────────────────────────────────────
     app.include_router(health_router)
     app.include_router(job_router)
+    app.include_router(job_action_router)
     return app
 
 

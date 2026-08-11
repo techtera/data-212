@@ -2,13 +2,17 @@ from __future__ import annotations
 
 import logging
 
-from src.db.crud import create_doc, get_doc, query_docs
+from src.db.crud import create_doc, get_doc, query_docs, update_doc
 from src.db.firebase import db  # noqa: F401  (imported to ensure Firebase is initialised)
 from src.schemas.fe_contract import (
+    AnnotationsResponse,
+    ApproveResponse,
     CreateJobRequest,
     CreateJobResponse,
     JobProgress,
     JobSummary,
+    RejectResponse,
+    RerunResponse,
 )
 from src.schemas.job import JobStatus
 
@@ -128,3 +132,108 @@ def list_jobs() -> list[JobSummary]:
         except Exception:
             logger.warning("Skipping malformed job %s in list", doc.get("id"))
     return summaries
+
+
+# ── M4 action helpers ─────────────────────────────────────────────────────────
+
+
+def _require_stage(job_id: str, required: str) -> dict:  # type: ignore[type-arg]
+    """Fetch the job doc and assert it is in *required* stage.
+
+    Returns the doc dict on success.
+    Raises ValueError (→ 409 in the route) when the stage does not match.
+    Raises KeyError (→ 404 in the route) when the job does not exist.
+    """
+    data = get_doc(COLLECTION, job_id)
+    if data is None:
+        raise KeyError(f"job {job_id} not found")
+    current = data.get("status", "error")
+    if current != required:
+        raise ValueError(f"job {job_id} is in stage '{current}', expected '{required}'")
+    return data
+
+
+def submit_annotations(job_id: str) -> AnnotationsResponse:
+    """Record that annotations have been uploaded and advance to awaiting_approval.
+
+    Guard: job must be in awaiting_annotation.
+    In V1 the FE sends { ack: true } — no real COCO zip is processed here.
+    In V4 this will rasterise the COCO polygons and store them in GCS.
+    """
+    _require_stage(job_id, JobStatus.awaiting_annotation.value)
+    update_doc(
+        COLLECTION,
+        job_id,
+        {
+            "status": JobStatus.awaiting_approval.value,
+            "annotations_uploaded": True,
+            "annotated_count": 4,  # canned — matches flagged image count
+            "unannotated_count": 0,
+            # V1 stub risk tier — visible in the FE approval modal
+            "risk_tier": "medium",
+            "risk_reasoning": "Stub: medium risk assumed (V1). Real scoring in V4.",
+        },
+    )
+    logger.info("Job %s: annotations submitted → awaiting_approval", job_id)
+    return AnnotationsResponse(ok=True, stage=JobStatus.awaiting_approval.value)
+
+
+def approve_job(job_id: str) -> ApproveResponse:
+    """Approve a job that is waiting for human review → advance to training.
+
+    Guard: job must be in awaiting_approval.
+    The caller is responsible for spawning run_training as a BackgroundTask.
+    """
+    _require_stage(job_id, JobStatus.awaiting_approval.value)
+    update_doc(
+        COLLECTION,
+        job_id,
+        {
+            "status": JobStatus.training.value,
+            "epoch": 1,
+        },
+    )
+    logger.info("Job %s: approved → training", job_id)
+    return ApproveResponse(stage=JobStatus.training.value)
+
+
+def reject_job(job_id: str) -> RejectResponse:
+    """Reject a job that is waiting for human review → terminate it.
+
+    Guard: job must be in awaiting_approval.
+    """
+    _require_stage(job_id, JobStatus.awaiting_approval.value)
+    update_doc(COLLECTION, job_id, {"status": JobStatus.rejected.value})
+    logger.info("Job %s: rejected", job_id)
+    return RejectResponse(stage=JobStatus.rejected.value)
+
+
+def rerun_job(job_id: str) -> RerunResponse:
+    """Create a brand-new job copying the prompt and dataset path of *job_id*.
+
+    Guard: original job must be in a terminal stage (done | rejected | error | failed).
+    The caller is responsible for spawning run_pre_masking for the new job.
+    """
+    _TERMINAL = {
+        JobStatus.done.value,
+        JobStatus.rejected.value,
+        JobStatus.error.value,
+        JobStatus.failed.value,
+    }
+    data = get_doc(COLLECTION, job_id)
+    if data is None:
+        raise KeyError(f"job {job_id} not found")
+    current = data.get("status", "error")
+    if current not in _TERMINAL:
+        raise ValueError(
+            f"job {job_id} is in stage '{current}'; "
+            f"rerun is only allowed from terminal stages: {sorted(_TERMINAL)}"
+        )
+
+    new_req = CreateJobRequest(
+        prompt=data.get("prompt", ""),
+        dataset_object_path=data.get("dataset_object_path", ""),
+    )
+    new_response = create_job(new_req)
+    logger.info("Job %s: re-run → new job %s", job_id, new_response.job_id)
+    return RerunResponse(new_job_id=new_response.job_id, stage=new_response.stage)

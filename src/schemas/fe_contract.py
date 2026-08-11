@@ -64,3 +64,41 @@ class JobProgress(BaseModel):
     total_epochs: int | None = None
     stage_failed: str | None = None
     log_excerpt: str | None = None
+
+
+# ── M4 action response shapes ─────────────────────────────────────────────────
+
+
+class AnnotationsRequest(BaseModel):
+    """POST /jobs/{id}/annotations  —  FE sends { ack: true } in V1.
+
+    In V4 this will be replaced with multipart/form-data carrying the COCO zip.
+    """
+
+    ack: bool = True
+
+
+class AnnotationsResponse(BaseModel):
+    """POST /jobs/{id}/annotations  →  matches FE AnnotationsResponse."""
+
+    ok: bool
+    stage: str  # "awaiting_approval"
+
+
+class ApproveResponse(BaseModel):
+    """POST /jobs/{id}/approve  →  matches FE ApproveResponse."""
+
+    stage: str  # "training"
+
+
+class RejectResponse(BaseModel):
+    """POST /jobs/{id}/reject  →  matches FE RejectResponse."""
+
+    stage: str  # "rejected"
+
+
+class RerunResponse(BaseModel):
+    """POST /jobs/{id}/rerun  →  matches FE RerunResponse."""
+
+    new_job_id: str
+    stage: str  # "pre_masking"
