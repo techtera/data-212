@@ -1,0 +1,46 @@
+from __future__ import annotations
+
+import logging
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
+
+from fastapi import FastAPI
+
+from src.middleware.cors import apply_cors
+from src.routes.health import router as health_router
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s  %(levelname)-8s  %(name)s  %(message)s",
+)
+logger = logging.getLogger("terafac")
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI) -> AsyncIterator[None]:
+    logger.info("TERAFAC backend starting — Phase 1 (FE → BE → Firestore)")
+    yield
+    logger.info("TERAFAC backend shut down")
+
+
+def create_app() -> FastAPI:
+    """Application factory — returns a fully configured FastAPI instance."""
+    app = FastAPI(
+        title="TERAFAC Backend",
+        description="Phase 1: FE → BE → Firestore with hardcoded auth and inline stubs.",
+        version="0.1.0",
+        lifespan=lifespan,
+    )
+
+    # ── Middleware ─────────────────────────────────────────────────────────────
+    apply_cors(app)
+
+    # ── Routers ───────────────────────────────────────────────────────────────
+    app.include_router(health_router)
+    # M1+ routers are registered here as they land.
+
+    return app
+
+
+# Module-level instance consumed by uvicorn and the test client.
+app = create_app()
