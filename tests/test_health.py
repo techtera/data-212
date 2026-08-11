@@ -18,31 +18,32 @@ async def test_health_no_token_allowed(client: AsyncClient) -> None:
     assert resp.status_code == 200
 
 
-# ── Auth guard on future routes ───────────────────────────────────────────────
+# ── Auth guard on registered /jobs route (M2+) ───────────────────────────────
 
 
-async def test_unregistered_route_no_token(client: AsyncClient) -> None:
-    """/jobs is not yet registered in M0 — expect 404 (not 401).
-    The auth guard only fires on routes that exist and declare the dependency.
-    """
+async def test_jobs_route_no_token_returns_401(client: AsyncClient) -> None:
+    """/jobs is now registered (M2) — missing token must return 401."""
     resp = await client.get("/jobs")
-    assert resp.status_code == 404
+    assert resp.status_code == 401
 
 
-async def test_unregistered_route_wrong_token(
+async def test_jobs_route_wrong_token_returns_401(
     client: AsyncClient, bad_auth_headers: dict[str, str]
 ) -> None:
-    """Same as above with a wrong token — still 404 because route doesn't exist yet."""
+    """/jobs with a wrong token must return 401."""
     resp = await client.get("/jobs", headers=bad_auth_headers)
-    assert resp.status_code == 404
+    assert resp.status_code == 401
 
 
-async def test_unregistered_route_correct_token(
+async def test_jobs_route_correct_token_returns_200(
     client: AsyncClient, auth_headers: dict[str, str]
 ) -> None:
-    """With the correct token the server responds — 404 because route not yet wired."""
-    resp = await client.get("/jobs", headers=auth_headers)
-    assert resp.status_code == 404
+    """With the correct token GET /jobs is admitted (200 — empty list is fine)."""
+    from unittest.mock import patch
+
+    with patch("src.routes.job_routes.job_service.list_jobs", return_value=[]):
+        resp = await client.get("/jobs", headers=auth_headers)
+    assert resp.status_code == 200
 
 
 # ── Settings ──────────────────────────────────────────────────────────────────

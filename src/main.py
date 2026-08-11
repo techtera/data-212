@@ -8,6 +8,7 @@ from fastapi import FastAPI
 
 from src.middleware.cors import apply_cors
 from src.routes.health import router as health_router
+from src.routes.job_routes import router as job_router
 
 logging.basicConfig(
     level=logging.INFO,
@@ -37,8 +38,7 @@ def create_app() -> FastAPI:
 
     # ── Routers ───────────────────────────────────────────────────────────────
     app.include_router(health_router)
-    # M1+ routers are registered here as they land.
-
+    app.include_router(job_router)
     return app
 
 
