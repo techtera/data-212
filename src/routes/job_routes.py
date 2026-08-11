@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
 
 from src.middleware.auth import require_auth
 from src.schemas.fe_contract import (
@@ -9,19 +9,25 @@ from src.schemas.fe_contract import (
     JobProgress,
     JobSummary,
 )
-from src.services import job_service
+from src.services import job_service, stubs
 
 router = APIRouter(tags=["jobs"], dependencies=[Depends(require_auth)])
 
 
 @router.post("/jobs", response_model=CreateJobResponse, status_code=status.HTTP_201_CREATED)
-async def create_job(req: CreateJobRequest) -> CreateJobResponse:
-    """Create a new training job.
+async def create_job(
+    req: CreateJobRequest,
+    background_tasks: BackgroundTasks,
+) -> CreateJobResponse:
+    """Create a new training job and immediately start the pre-masking stub.
 
-    Validates the request, writes to Firestore, and returns the job_id + initial stage.
-    Spawning the pre_masking background task is wired in M3.
+    The pre_masking background task sleeps 4 s then advances the job stage
+    to awaiting_annotation.  The HTTP response (201) is returned instantly —
+    the client polls GET /jobs/{id} to follow stage progression.
     """
-    return job_service.create_job(req)
+    result = job_service.create_job(req)
+    background_tasks.add_task(stubs.run_pre_masking, result.job_id)
+    return result
 
 
 @router.get("/jobs", response_model=list[JobSummary])

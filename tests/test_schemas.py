@@ -11,13 +11,17 @@ from src.schemas.job import JobCreate, JobResponse, JobStatus
 
 
 def test_job_status_values() -> None:
-    """All six declared enum members must be accessible and equal their string value."""
+    """All declared enum members must be accessible and equal their string value."""
     assert JobStatus.pre_masking.value == "pre_masking"
     assert JobStatus.awaiting_annotation.value == "awaiting_annotation"
     assert JobStatus.annotating.value == "annotating"
+    assert JobStatus.awaiting_approval.value == "awaiting_approval"
     assert JobStatus.approved.value == "approved"
+    assert JobStatus.training.value == "training"
+    assert JobStatus.done.value == "done"
     assert JobStatus.rejected.value == "rejected"
     assert JobStatus.failed.value == "failed"
+    assert JobStatus.error.value == "error"
 
 
 def test_job_status_is_str_subclass() -> None:

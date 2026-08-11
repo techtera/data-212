@@ -7,14 +7,21 @@ from pydantic import BaseModel, ConfigDict, field_serializer
 
 
 class JobStatus(StrEnum):
-    """All valid lifecycle states for a training job."""
+    """All valid lifecycle states for a training job.
+
+    Must stay in sync with the Stage type in frontend/src/types/job.ts.
+    """
 
     pre_masking = "pre_masking"
     awaiting_annotation = "awaiting_annotation"
     annotating = "annotating"
+    awaiting_approval = "awaiting_approval"
     approved = "approved"
+    training = "training"
+    done = "done"
     rejected = "rejected"
     failed = "failed"
+    error = "error"
 
 
 class JobCreate(BaseModel):
