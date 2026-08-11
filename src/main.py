@@ -7,9 +7,12 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 
 from src.middleware.cors import apply_cors
+from src.routes.auth_routes import router as auth_router
+from src.routes.data_routes import router as data_router
 from src.routes.health import router as health_router
 from src.routes.job_action_routes import router as job_action_router
 from src.routes.job_routes import router as job_router
+from src.routes.upload_routes import router as upload_router
 
 logging.basicConfig(
     level=logging.INFO,
@@ -39,8 +42,11 @@ def create_app() -> FastAPI:
 
     # ── Routers ───────────────────────────────────────────────────────────────
     app.include_router(health_router)
+    app.include_router(auth_router)
+    app.include_router(upload_router)
     app.include_router(job_router)
     app.include_router(job_action_router)
+    app.include_router(data_router)
     return app
 
 

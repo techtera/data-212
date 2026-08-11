@@ -102,3 +102,113 @@ class RerunResponse(BaseModel):
 
     new_job_id: str
     stage: str  # "pre_masking"
+
+
+# ── M5 data / upload / auth response shapes ───────────────────────────────────
+
+
+class UploadSignResponse(BaseModel):
+    """POST /uploads/sign  →  matches FE UploadSignResponse."""
+
+    signed_put_url: str  # GCS signed PUT URL (V4) or stub path (V1)
+    object_path: str  # "datasets/{id}/raw.zip"
+
+
+class LoginRequest(BaseModel):
+    """POST /auth/login  —  hardcoded V1 username/password check."""
+
+    username: str
+    password: str
+
+
+class LoginResponse(BaseModel):
+    """POST /auth/login  →  token + expiry for V1 static auth."""
+
+    token: str
+    expires_at: str  # ISO 8601 — far future in V1
+
+
+class FlaggedImage(BaseModel):
+    """One element of GET /jobs/{id}/flagged  →  matches FE FlaggedImage."""
+
+    image_id: str
+    url: str
+
+
+class DataPreviewImage(BaseModel):
+    """One element of GET /jobs/{id}/data-preview  →  matches FE DataPreviewImage."""
+
+    image_id: str
+    url: str
+
+
+class ComputeSample(BaseModel):
+    """GET /jobs/{id}/compute  →  matches FE ComputeSample."""
+
+    vram_used_mb: float
+    vram_total_mb: float
+    gpu_util_pct: float
+    quota_remaining_jobs: int
+    quota_remaining_minutes: int
+    ts: str  # ISO 8601 server timestamp
+
+
+class LogLine(BaseModel):
+    """One log line inside LogsResponse  →  matches FE LogLine."""
+
+    ts: str
+    level: str  # "info" | "warn" | "error"
+    msg: str
+
+
+class EpochMetrics(BaseModel):
+    """One epoch row inside LogsResponse  →  matches FE EpochMetrics."""
+
+    epoch: int
+    loss_tr: float
+    loss_val: float
+    acc: float
+    iou: float
+    dice: float
+
+
+class LogsResponse(BaseModel):
+    """GET /jobs/{id}/logs  →  matches FE LogsResponse."""
+
+    lines: list[LogLine]
+    epochs: list[EpochMetrics]
+
+
+class FinalMetrics(BaseModel):
+    """Nested in ResultsResponse  →  matches FE FinalMetrics."""
+
+    loss_val: float
+    acc: float
+    iou: float
+    dice: float
+    epochs: int
+    total_minutes: float
+
+
+class SamplePrediction(BaseModel):
+    """One prediction triplet in ResultsResponse  →  matches FE SamplePrediction."""
+
+    image_url: str
+    pred_mask_url: str
+    gt_mask_url: str
+
+
+class ResultsResponse(BaseModel):
+    """GET /jobs/{id}/results  →  matches FE ResultsResponse."""
+
+    final_metrics: FinalMetrics
+    sample_predictions: list[SamplePrediction]
+    risk_tier: str  # "low" | "medium" | "high" | "auto"
+    risk_reasoning: str
+
+
+class InferenceResponse(BaseModel):
+    """GET /jobs/{id}/inference  →  matches FE InferenceResponse."""
+
+    code: str
+    checkpoint_signed_url: str
