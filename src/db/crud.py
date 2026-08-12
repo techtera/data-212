@@ -5,6 +5,7 @@ from datetime import UTC, datetime
 from typing import Any
 
 from google.cloud.firestore_v1 import SERVER_TIMESTAMP  # type: ignore[import-untyped]
+from google.cloud.firestore_v1.base_query import FieldFilter  # type: ignore[import-untyped]
 
 # `db` is the only Firebase symbol ever used outside firebase.py.
 # All other modules must import from here, not from firebase_admin directly.
@@ -96,7 +97,7 @@ def query_docs(
     query = db.collection(collection).limit(limit)
     if filters:
         for field, op, value in filters:
-            query = query.where(field, op, value)
+            query = query.where(filter=FieldFilter(field, op, value))
 
     results: list[dict[str, Any]] = []
     for snapshot in query.stream():

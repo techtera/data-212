@@ -139,7 +139,13 @@ def test_query_docs_with_filters_calls_where() -> None:
 
         query_docs("jobs", filters=[("status", "==", "approved")])
 
-    mock_query.where.assert_called_once_with("status", "==", "approved")
+    # V2: query_docs now uses FieldFilter(field, op, value) via keyword arg.
+    call_kwargs = mock_query.where.call_args
+    assert call_kwargs is not None
+    ff = call_kwargs.kwargs.get("filter") or (call_kwargs.args[0] if call_kwargs.args else None)
+    assert ff is not None
+    assert ff.field_path == "status"
+    assert ff.value == "approved"
 
 
 # ── _convert_timestamps (unit) ────────────────────────────────────────────────

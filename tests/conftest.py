@@ -1,10 +1,16 @@
 from __future__ import annotations
 
+import os
 import sys
 from unittest.mock import MagicMock, patch
 
 import pytest
 from httpx import ASGITransport, AsyncClient
+
+# ── Set ALLOW_DEV_TOKEN before any src module is imported ─────────────────────
+# V2 middleware checks this flag to allow the legacy "dev-token-change-me" token
+# in tests. Must be set before src.config is imported so lru_cache picks it up.
+os.environ.setdefault("ALLOW_DEV_TOKEN", "true")
 
 # ── Firebase stub — must happen BEFORE any src.db module is imported ──────────
 #
@@ -57,7 +63,11 @@ async def client() -> AsyncClient:
 
 @pytest.fixture
 def auth_headers(settings: Settings) -> dict[str, str]:
-    """Valid Authorization header using the configured ADMIN_TOKEN."""
+    """Valid Authorization header using the configured ADMIN_TOKEN.
+
+    Works because ALLOW_DEV_TOKEN=true is set at module scope above,
+    so V2 middleware accepts the dev-token for tests.
+    """
     return {"Authorization": f"Bearer {settings.admin_token}"}
 
 
