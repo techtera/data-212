@@ -15,10 +15,17 @@ class Settings(BaseSettings):
         extra="ignore",  # ignore Firebase/GCP env vars not declared in this model
     )
 
-    # Auth
+    # Auth — V1 legacy (kept for dev-token fallback only)
     admin_token: str = "dev-token-change-me"
     admin_username: str = "admin"
     admin_password: str = "admin"
+
+    # Auth — V2: session-based auth settings
+    bcrypt_rounds: int = 12
+    session_ttl_hours: int = 24
+    allow_dev_token: bool = False  # NEVER True in production
+    rate_limit_login_per_minute: int = 5
+    max_jobs_per_user_per_day: int = 20
 
     # CORS
     cors_origins: str = "http://localhost:3100,http://localhost:3000"
