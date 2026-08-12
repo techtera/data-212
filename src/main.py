@@ -14,6 +14,7 @@ from src.routes.health import router as health_router
 from src.routes.job_action_routes import router as job_action_router
 from src.routes.job_routes import router as job_router
 from src.routes.upload_routes import router as upload_router
+from src.services.broker import get_broker
 
 logging.basicConfig(
     level=logging.INFO,
@@ -28,8 +29,13 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     settings = get_settings()
     if not settings.jwt_hop_secret or len(settings.jwt_hop_secret) < 32:
         raise RuntimeError("JWT_HOP_SECRET not configured or too short (min 32 chars)")
+
+    # V3: Start the broker worker loop
+    broker = get_broker()
+    await broker.start_worker()
     logger.info("TERAFAC backend starting — V3 (broker + hop tokens)")
     yield
+    await broker.stop_worker()
     logger.info("TERAFAC backend shut down")
 
 
