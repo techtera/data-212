@@ -19,6 +19,7 @@ import jwt
 from fastapi import HTTPException, status
 
 from src.config import get_settings
+from src.services.audit import log_hop_issued, log_hop_verified
 
 logger = logging.getLogger(__name__)
 
@@ -60,6 +61,8 @@ def issue_hop_token(job_id: str, step: str) -> str:
         now,
         expires_at,
     )
+    # Write audit entry — metadata only, no raw token
+    log_hop_issued(job_id, step, issued_at=now, expires_at=expires_at)
     return token
 
 
@@ -116,4 +119,6 @@ def verify_hop_token(token: str, expected_step: str) -> dict:
         payload.get("sub"),
         payload.get("step"),
     )
+    # Write audit entry — metadata only, no raw token
+    log_hop_verified(payload.get("sub", ""), payload.get("step", ""))
     return payload
