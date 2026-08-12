@@ -13,7 +13,7 @@ validation are all exercised.
 
 from __future__ import annotations
 
-from unittest.mock import MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from httpx import AsyncClient
@@ -139,7 +139,10 @@ async def test_e2e_create_job_stores_owner_id(client: AsyncClient, auth_headers:
     with (
         patch("src.services.job_service.create_doc", return_value=_JOB_ID) as mock_create,
         patch("src.services.job_service.get_doc", return_value=_job()),
-        patch("src.routes.job_routes.stubs.run_pre_masking"),
+        patch(
+            "src.routes.job_routes.get_broker",
+            return_value=AsyncMock(enqueue=AsyncMock()),
+        ),
         patch("src.middleware.quota.query_docs", return_value=[]),
     ):
         resp = await client.post(
@@ -184,7 +187,10 @@ async def test_e2e_create_job_owner_id_not_empty_for_real_session(
         patch("src.middleware.auth.db_users.get_user_by_id", return_value=_FAKE_USER),
         patch("src.services.job_service.create_doc", return_value=_JOB_ID) as mock_create,
         patch("src.services.job_service.get_doc", return_value=_job()),
-        patch("src.routes.job_routes.stubs.run_pre_masking"),
+        patch(
+            "src.routes.job_routes.get_broker",
+            return_value=AsyncMock(enqueue=AsyncMock()),
+        ),
         patch("src.middleware.quota.query_docs", return_value=[]),
     ):
         resp = await client.post(
@@ -281,7 +287,10 @@ async def test_e2e_approve_job(client: AsyncClient, auth_headers: dict):
             return_value=_job(status="awaiting_approval"),
         ),
         patch("src.services.job_service.update_doc"),
-        patch("src.routes.job_action_routes.stubs.run_training"),
+        patch(
+            "src.routes.job_action_routes.get_broker",
+            return_value=AsyncMock(enqueue=AsyncMock()),
+        ),
     ):
         resp = await client.post(f"/jobs/{_JOB_ID}/approve", headers=auth_headers)
     assert resp.status_code == 200
@@ -382,7 +391,10 @@ async def test_e2e_rerun_inherits_owner_id(client: AsyncClient, auth_headers: di
             ],
         ),
         patch("src.services.job_service.create_doc", return_value="job_rerun_001") as mock_create,
-        patch("src.routes.job_action_routes.stubs.run_pre_masking"),
+        patch(
+            "src.routes.job_action_routes.get_broker",
+            return_value=AsyncMock(enqueue=AsyncMock()),
+        ),
     ):
         resp = await client.post(f"/jobs/{_JOB_ID}/rerun", headers=auth_headers)
 

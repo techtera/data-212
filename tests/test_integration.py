@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from unittest.mock import patch
+from unittest.mock import AsyncMock, patch
 
 import pytest
 from httpx import AsyncClient
@@ -139,7 +139,10 @@ async def test_create_job_returns_pre_masking(client: AsyncClient) -> None:
     with (
         patch("src.services.job_service.create_doc", return_value="job_int_001"),
         patch("src.services.job_service.get_doc", return_value=_doc()),
-        patch("src.routes.job_routes.stubs.run_pre_masking"),  # don't actually sleep
+        patch(
+            "src.routes.job_routes.get_broker",
+            return_value=AsyncMock(enqueue=AsyncMock()),
+        ),
     ):
         resp = await client.post(
             "/jobs",
@@ -268,7 +271,10 @@ async def test_approve_job(client: AsyncClient) -> None:
             return_value=_doc(status="awaiting_approval"),
         ),
         patch("src.services.job_service.update_doc"),
-        patch("src.routes.job_action_routes.stubs.run_training"),  # don't sleep
+        patch(
+            "src.routes.job_action_routes.get_broker",
+            return_value=AsyncMock(enqueue=AsyncMock()),
+        ),
     ):
         resp = await client.post("/jobs/job_int_001/approve", headers=HEADERS)
 
@@ -434,7 +440,10 @@ async def test_rerun_job(client: AsyncClient) -> None:
             return_value=_doc(status="done"),
         ),
         patch("src.services.job_service.create_doc", return_value="job_int_002"),
-        patch("src.routes.job_action_routes.stubs.run_pre_masking"),
+        patch(
+            "src.routes.job_action_routes.get_broker",
+            return_value=AsyncMock(enqueue=AsyncMock()),
+        ),
     ):
         resp = await client.post("/jobs/job_int_001/rerun", headers=HEADERS)
 

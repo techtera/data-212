@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import asyncio
-from unittest.mock import patch
+from unittest.mock import AsyncMock, patch
 
 from src.schemas.job import JobStatus
 from src.services.stubs import (
@@ -154,19 +154,19 @@ async def test_create_job_route_spawns_pre_masking(
     client,  # type: ignore[no-untyped-def]
     auth_headers: dict,
 ) -> None:
-    """POST /jobs must return 201 AND add run_pre_masking as a background task."""
+    """POST /jobs must return 201 and enqueue a pre_masking BrokerTask via broker."""
     from src.schemas.fe_contract import CreateJobResponse
 
     mock_response = CreateJobResponse(job_id="job_bt_01", stage="pre_masking")
-
-    pre_masking_called_with: list[str] = []
-
-    async def fake_pre_masking(job_id: str) -> None:
-        pre_masking_called_with.append(job_id)
+    mock_enqueue = AsyncMock()
 
     with (
         patch("src.routes.job_routes.job_service.create_job", return_value=mock_response),
-        patch("src.routes.job_routes.stubs.run_pre_masking", side_effect=fake_pre_masking),
+        patch(
+            "src.routes.job_routes.get_broker",
+            return_value=AsyncMock(enqueue=mock_enqueue),
+        ),
+        patch("src.middleware.quota.query_docs", return_value=[]),
     ):
         resp = await client.post(
             "/jobs",
@@ -178,25 +178,32 @@ async def test_create_job_route_spawns_pre_masking(
     body = resp.json()
     assert body["job_id"] == "job_bt_01"
     assert body["stage"] == "pre_masking"
-    # BackgroundTasks runs the coroutine; verify it was invoked with the right id
-    assert pre_masking_called_with == ["job_bt_01"]
+    # Broker must have been called with the correct job_id and step
+    mock_enqueue.assert_awaited_once()
+    task = mock_enqueue.call_args[0][0]
+    assert task.job_id == "job_bt_01"
+    assert task.task_type == "pre_masking"
 
 
 async def test_create_job_route_returns_201_before_task_finishes(
     client,  # type: ignore[no-untyped-def]
     auth_headers: dict,
 ) -> None:
-    """HTTP 201 must be returned even when the background task has a delay."""
+    """HTTP 201 must be returned even when the broker enqueue yields."""
     from src.schemas.fe_contract import CreateJobResponse
 
     mock_response = CreateJobResponse(job_id="job_bt_02", stage="pre_masking")
 
-    async def slow_pre_masking(job_id: str) -> None:
+    async def slow_enqueue(task):  # type: ignore[no-untyped-def]
         await asyncio.sleep(0)  # yield but don't block
 
     with (
         patch("src.routes.job_routes.job_service.create_job", return_value=mock_response),
-        patch("src.routes.job_routes.stubs.run_pre_masking", side_effect=slow_pre_masking),
+        patch(
+            "src.routes.job_routes.get_broker",
+            return_value=AsyncMock(enqueue=slow_enqueue),
+        ),
+        patch("src.middleware.quota.query_docs", return_value=[]),
     ):
         resp = await client.post(
             "/jobs",

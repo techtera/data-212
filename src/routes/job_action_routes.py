@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status
 
 from src.middleware.auth import require_auth
 from src.schemas.fe_contract import (
@@ -10,7 +10,9 @@ from src.schemas.fe_contract import (
     RejectResponse,
     RerunResponse,
 )
-from src.services import job_service, stubs
+from src.services import job_service
+from src.services.broker import BrokerTask, get_broker
+from src.services.jwt_hop import issue_hop_token
 
 router = APIRouter(tags=["job-actions"], dependencies=[Depends(require_auth)])
 
@@ -56,13 +58,11 @@ async def submit_annotations(
 
 
 @router.post("/jobs/{job_id}/approve", response_model=ApproveResponse)
-async def approve_job(
-    job_id: str,
-    background_tasks: BackgroundTasks,
-) -> ApproveResponse:
+async def approve_job(job_id: str) -> ApproveResponse:
     """Approve a job awaiting human review → advance to training.
 
-    Immediately spawns the training stub as a BackgroundTask.
+    Mints a training-scoped hop token and dispatches the training task
+    via the broker.
     Guard: job must be in awaiting_approval — returns 409 otherwise.
     """
     try:
@@ -72,7 +72,9 @@ async def approve_job(
     except ValueError as exc:
         raise _wrong_stage(str(exc)) from exc
 
-    background_tasks.add_task(stubs.run_training, job_id)
+    token = issue_hop_token(job_id, step="training")
+    broker = get_broker()
+    await broker.enqueue(BrokerTask(job_id=job_id, task_type="training", hop_token=token))
     return result
 
 
@@ -97,14 +99,11 @@ async def reject_job(job_id: str) -> RejectResponse:
 
 
 @router.post("/jobs/{job_id}/rerun", response_model=RerunResponse)
-async def rerun_job(
-    job_id: str,
-    background_tasks: BackgroundTasks,
-) -> RerunResponse:
+async def rerun_job(job_id: str) -> RerunResponse:
     """Clone a finished job and start it from scratch.
 
     Copies the original prompt + dataset_object_path into a new job document,
-    then immediately spawns the pre_masking background task for the new job.
+    mints a pre_masking hop token and dispatches via the broker.
     Guard: original job must be in a terminal stage (done | rejected | error | failed).
     """
     try:
@@ -114,5 +113,9 @@ async def rerun_job(
     except ValueError as exc:
         raise _wrong_stage(str(exc)) from exc
 
-    background_tasks.add_task(stubs.run_pre_masking, result.new_job_id)
+    token = issue_hop_token(result.new_job_id, step="pre_masking")
+    broker = get_broker()
+    await broker.enqueue(
+        BrokerTask(job_id=result.new_job_id, task_type="pre_masking", hop_token=token)
+    )
     return result

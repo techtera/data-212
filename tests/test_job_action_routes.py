@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from unittest.mock import patch
+from unittest.mock import AsyncMock, patch
 
 from httpx import AsyncClient
 
@@ -79,10 +79,6 @@ async def test_annotations_no_auth_returns_401(client: AsyncClient) -> None:
 async def test_approve_returns_200_training(client: AsyncClient, auth_headers: dict) -> None:
     """POST approve on awaiting_approval must return 200 + stage=training."""
     mock_resp = ApproveResponse(stage="training")
-    training_called: list[str] = []
-
-    async def fake_training(job_id: str) -> None:
-        training_called.append(job_id)
 
     with (
         patch(
@@ -90,26 +86,22 @@ async def test_approve_returns_200_training(client: AsyncClient, auth_headers: d
             return_value=mock_resp,
         ),
         patch(
-            "src.routes.job_action_routes.stubs.run_training",
-            side_effect=fake_training,
+            "src.routes.job_action_routes.get_broker",
+            return_value=AsyncMock(enqueue=AsyncMock()),
         ),
     ):
         resp = await client.post("/jobs/job_001/approve", headers=auth_headers)
 
     assert resp.status_code == 200
     assert resp.json()["stage"] == "training"
-    assert training_called == ["job_001"]
 
 
-async def test_approve_spawns_training_background_task(
+async def test_approve_enqueues_training_broker_task(
     client: AsyncClient, auth_headers: dict
 ) -> None:
-    """Approve must spawn run_training as a BackgroundTask."""
+    """Approve must enqueue a training BrokerTask via the broker."""
     mock_resp = ApproveResponse(stage="training")
-    spawned: list[str] = []
-
-    async def capture_training(job_id: str) -> None:
-        spawned.append(job_id)
+    mock_enqueue = AsyncMock()
 
     with (
         patch(
@@ -117,13 +109,16 @@ async def test_approve_spawns_training_background_task(
             return_value=mock_resp,
         ),
         patch(
-            "src.routes.job_action_routes.stubs.run_training",
-            side_effect=capture_training,
+            "src.routes.job_action_routes.get_broker",
+            return_value=AsyncMock(enqueue=mock_enqueue),
         ),
     ):
         await client.post("/jobs/job_001/approve", headers=auth_headers)
 
-    assert spawned == ["job_001"]
+    mock_enqueue.assert_awaited_once()
+    task = mock_enqueue.call_args[0][0]
+    assert task.job_id == "job_001"
+    assert task.task_type == "training"
 
 
 async def test_approve_wrong_stage_returns_409(client: AsyncClient, auth_headers: dict) -> None:
@@ -199,10 +194,6 @@ async def test_reject_no_auth_returns_401(client: AsyncClient) -> None:
 async def test_rerun_returns_200_new_job(client: AsyncClient, auth_headers: dict) -> None:
     """POST rerun on a terminal job must return 200 + new_job_id."""
     mock_resp = RerunResponse(new_job_id="job_002", stage="pre_masking")
-    pre_masking_called: list[str] = []
-
-    async def fake_pre_masking(job_id: str) -> None:
-        pre_masking_called.append(job_id)
 
     with (
         patch(
@@ -210,8 +201,8 @@ async def test_rerun_returns_200_new_job(client: AsyncClient, auth_headers: dict
             return_value=mock_resp,
         ),
         patch(
-            "src.routes.job_action_routes.stubs.run_pre_masking",
-            side_effect=fake_pre_masking,
+            "src.routes.job_action_routes.get_broker",
+            return_value=AsyncMock(enqueue=AsyncMock()),
         ),
     ):
         resp = await client.post("/jobs/job_001/rerun", headers=auth_headers)
@@ -220,29 +211,31 @@ async def test_rerun_returns_200_new_job(client: AsyncClient, auth_headers: dict
     body = resp.json()
     assert body["new_job_id"] == "job_002"
     assert body["stage"] == "pre_masking"
-    assert pre_masking_called == ["job_002"]
 
 
-async def test_rerun_spawns_pre_masking_for_new_job(
+async def test_rerun_enqueues_pre_masking_for_new_job(
     client: AsyncClient, auth_headers: dict
 ) -> None:
-    """Rerun must spawn run_pre_masking for the NEW job id, not the original."""
+    """Rerun must enqueue a pre_masking BrokerTask for the NEW job id."""
     mock_resp = RerunResponse(new_job_id="job_NEW", stage="pre_masking")
-    spawned: list[str] = []
-
-    async def capture(job_id: str) -> None:
-        spawned.append(job_id)
+    mock_enqueue = AsyncMock()
 
     with (
         patch(
             "src.routes.job_action_routes.job_service.rerun_job",
             return_value=mock_resp,
         ),
-        patch("src.routes.job_action_routes.stubs.run_pre_masking", side_effect=capture),
+        patch(
+            "src.routes.job_action_routes.get_broker",
+            return_value=AsyncMock(enqueue=mock_enqueue),
+        ),
     ):
         await client.post("/jobs/job_001/rerun", headers=auth_headers)
 
-    assert spawned == ["job_NEW"]
+    mock_enqueue.assert_awaited_once()
+    task = mock_enqueue.call_args[0][0]
+    assert task.job_id == "job_NEW"
+    assert task.task_type == "pre_masking"
 
 
 async def test_rerun_non_terminal_returns_409(client: AsyncClient, auth_headers: dict) -> None:

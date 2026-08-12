@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 
 from src.middleware.auth import require_auth
 from src.middleware.quota import check_job_quota
@@ -10,7 +10,9 @@ from src.schemas.fe_contract import (
     JobProgress,
     JobSummary,
 )
-from src.services import job_service, stubs
+from src.services import job_service
+from src.services.broker import BrokerTask, get_broker
+from src.services.jwt_hop import issue_hop_token
 
 router = APIRouter(tags=["jobs"], dependencies=[Depends(require_auth)])
 
@@ -24,20 +26,22 @@ router = APIRouter(tags=["jobs"], dependencies=[Depends(require_auth)])
 async def create_job(
     req: CreateJobRequest,
     request: Request,
-    background_tasks: BackgroundTasks,
 ) -> CreateJobResponse:
-    """Create a new training job and immediately start the pre-masking stub.
+    """Create a new training job and dispatch the pre-masking task via broker.
 
     Quota is checked before the job is created (check_job_quota dependency).
     owner_id is read from request.state (set by require_auth) and stored on
     the job document so quota and ownership queries work correctly.
-    The pre_masking background task sleeps 4 s then advances the job stage
-    to awaiting_annotation.  The HTTP response (201) is returned instantly —
-    the client polls GET /jobs/{id} to follow stage progression.
+    A short-lived hop token is minted and the pre_masking task is enqueued
+    on the broker.  The HTTP response (201) is returned instantly — the
+    client polls GET /jobs/{id} to follow stage progression.
     """
     owner_id: str = getattr(request.state, "user_id", "")
     result = job_service.create_job(req, owner_id=owner_id)
-    background_tasks.add_task(stubs.run_pre_masking, result.job_id)
+
+    token = issue_hop_token(result.job_id, step="pre_masking")
+    broker = get_broker()
+    await broker.enqueue(BrokerTask(job_id=result.job_id, task_type="pre_masking", hop_token=token))
     return result
 
 
