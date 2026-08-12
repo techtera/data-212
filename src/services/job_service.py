@@ -51,11 +51,13 @@ def _compute_progress(stage: str, epoch: int | None, total_epochs: int | None) -
             return 0
 
 
-def create_job(req: CreateJobRequest) -> CreateJobResponse:
+def create_job(req: CreateJobRequest, owner_id: str = "") -> CreateJobResponse:
     """Write a new job document and return the FE-facing CreateJobResponse.
 
     Maps FE fields (prompt, dataset_object_path) → Firestore document.
     Status is always forced to pre_masking on creation.
+    owner_id is the authenticated user's Firestore user_id; defaults to ""
+    for dev-token / legacy callers but must be set in production (V2+).
     """
 
     from google.cloud.firestore_v1 import SERVER_TIMESTAMP  # type: ignore[import-untyped]
@@ -64,6 +66,7 @@ def create_job(req: CreateJobRequest) -> CreateJobResponse:
         "prompt": req.prompt,
         "dataset_object_path": req.dataset_object_path,
         "status": JobStatus.pre_masking.value,
+        "owner_id": owner_id,  # V2: scopes the job to the creating user
         "risk_tier": None,
         "epoch": None,
         "total_epochs": 10,
@@ -77,7 +80,7 @@ def create_job(req: CreateJobRequest) -> CreateJobResponse:
         "updated_at": SERVER_TIMESTAMP,
     }
     doc_id = create_doc(COLLECTION, payload)
-    logger.info("Created job %s", doc_id)
+    logger.info("Created job %s (owner logged separately)", doc_id)
     return CreateJobResponse(job_id=doc_id, stage=JobStatus.pre_masking.value)
 
 
@@ -234,6 +237,8 @@ def rerun_job(job_id: str) -> RerunResponse:
         prompt=data.get("prompt", ""),
         dataset_object_path=data.get("dataset_object_path", ""),
     )
-    new_response = create_job(new_req)
+    # Preserve the original owner when re-running so quota tracking stays correct.
+    original_owner = data.get("owner_id", "")
+    new_response = create_job(new_req, owner_id=original_owner)
     logger.info("Job %s: re-run → new job %s", job_id, new_response.job_id)
     return RerunResponse(new_job_id=new_response.job_id, stage=new_response.stage)

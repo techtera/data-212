@@ -200,7 +200,7 @@ def test_compute_progress_all_stages() -> None:
 
 
 def test_service_create_job_calls_create_doc() -> None:
-    """job_service.create_job must call create_doc with correct status."""
+    """job_service.create_job must call create_doc with correct status and owner_id."""
     from src.schemas.fe_contract import CreateJobRequest
     from src.services.job_service import create_job
 
@@ -210,13 +210,14 @@ def test_service_create_job_calls_create_doc() -> None:
         patch("src.services.job_service.create_doc", return_value="doc-new") as mock_create,
         patch("src.services.job_service.get_doc", return_value=None),
     ):
-        result = create_job(req)
+        result = create_job(req, owner_id="user_abc")
 
     assert result.job_id == "doc-new"
     assert result.stage == "pre_masking"
     payload = mock_create.call_args[0][1]
     assert payload["status"] == "pre_masking"
     assert payload["prompt"] == "test"
+    assert payload["owner_id"] == "user_abc"
 
 
 def test_service_get_job_progress_none_for_missing() -> None:
