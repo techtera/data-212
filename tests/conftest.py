@@ -12,6 +12,11 @@ from httpx import ASGITransport, AsyncClient
 # in tests. Must be set before src.config is imported so lru_cache picks it up.
 os.environ.setdefault("ALLOW_DEV_TOKEN", "true")
 
+# ── Set JWT_HOP_SECRET before any src module is imported ──────────────────────
+# V3 lifespan validation raises RuntimeError if this is missing or < 32 chars.
+# Must be set before src.main is imported so the check passes during collection.
+os.environ.setdefault("JWT_HOP_SECRET", "test-jwt-hop-secret-for-pytest-minimum-32-chars!!")
+
 # ── Firebase stub — must happen BEFORE any src.db module is imported ──────────
 #
 # firebase_admin is patched at the top of conftest so that when pytest collects

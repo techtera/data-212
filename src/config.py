@@ -27,6 +27,12 @@ class Settings(BaseSettings):
     rate_limit_login_per_minute: int = 5
     max_jobs_per_user_per_day: int = 20
 
+    # JWT hop tokens — V3: broker issues short-lived, scoped JWTs per task hop
+    jwt_hop_secret: str = ""  # 256-bit minimum (32+ chars), loaded from JWT_HOP_SECRET env var
+    jwt_hop_issuer: str = "terafac-api"
+    jwt_hop_audience: str = "terafac-worker"
+    jwt_hop_ttl_seconds: int = 300  # 5 minutes
+
     # CORS
     cors_origins: str = "http://localhost:3100,http://localhost:3000"
 
