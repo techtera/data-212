@@ -4,6 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException, Response, status
 
 from src.config import Settings, get_settings
 from src.middleware.auth import require_auth
+from src.middleware.rate_limit import check_login_rate_limit
 from src.schemas.fe_contract import LoginRequest, LoginResponse
 
 router = APIRouter(tags=["auth"])
@@ -12,7 +13,11 @@ router = APIRouter(tags=["auth"])
 _STATIC_EXPIRES_AT = "2099-12-31T23:59:59Z"
 
 
-@router.post("/auth/login", response_model=LoginResponse)
+@router.post(
+    "/auth/login",
+    response_model=LoginResponse,
+    dependencies=[Depends(check_login_rate_limit)],
+)
 async def login(
     req: LoginRequest,
     settings: Settings = Depends(get_settings),
@@ -22,6 +27,7 @@ async def login(
     V1: compares against ADMIN_USERNAME / ADMIN_PASSWORD env vars.
     V2: replaced with bcrypt hash check + Firestore session creation.
     No Bearer token required — this IS the token-issuing endpoint.
+    Rate-limited by IP via check_login_rate_limit dependency.
     """
     if req.username != settings.admin_username or req.password != settings.admin_password:
         raise HTTPException(

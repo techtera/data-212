@@ -47,6 +47,19 @@ _path_exists_patch.start()
 
 from src.config import Settings, get_settings  # noqa: E402
 from src.main import app  # noqa: E402
+from src.middleware.rate_limit import reset_all_rate_limits  # noqa: E402
+
+
+@pytest.fixture(autouse=True)
+def reset_rate_limits_between_tests():
+    """Clear the in-memory rate-limit buckets before every test.
+
+    Prevents login-attempt counts from bleeding across tests that
+    all share the same loopback IP (127.0.0.1 / testclient).
+    """
+    reset_all_rate_limits()
+    yield
+    reset_all_rate_limits()
 
 
 @pytest.fixture
