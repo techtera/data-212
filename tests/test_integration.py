@@ -70,15 +70,35 @@ async def test_health(client: AsyncClient) -> None:
 
 
 async def test_login_returns_token(client: AsyncClient) -> None:
-    resp = await client.post("/auth/login", json={"username": "admin", "password": "admin"})
+    """V2: login accepts email + password and returns a session token."""
+    fake_user = {
+        "id": "user_int_001",
+        "email": "admin@terafac.dev",
+        "password_hash": "",
+        "is_active": True,
+    }
+    with (
+        patch("src.services.auth_service.db_users.get_user_by_email", return_value=fake_user),
+        patch("src.services.auth_service.verify_password", return_value=True),
+        patch("src.db.sessions.db") as mock_db,
+    ):
+        mock_db.collection.return_value.document.return_value.set.return_value = None
+        resp = await client.post(
+            "/auth/login", json={"email": "admin@terafac.dev", "password": "adminpass1"}
+        )
     assert resp.status_code == 200
     body = resp.json()
-    assert body["token"] == "dev-token-change-me"
-    assert "expires_at" in body
+    assert "access_token" in body
+    assert "expires_in" in body
+    assert body["token_type"] == "bearer"
 
 
 async def test_login_wrong_creds_rejected(client: AsyncClient) -> None:
-    resp = await client.post("/auth/login", json={"username": "admin", "password": "wrong"})
+    """V2: wrong credentials return 401 regardless of whether user exists."""
+    with patch("src.services.auth_service.db_users.get_user_by_email", return_value=None):
+        resp = await client.post(
+            "/auth/login", json={"email": "nobody@terafac.dev", "password": "wrongpass"}
+        )
     assert resp.status_code == 401
 
 

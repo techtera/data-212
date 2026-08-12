@@ -10,7 +10,7 @@ Verifies the in-memory sliding-window IP rate limiter:
 from __future__ import annotations
 
 import time
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
 import pytest
 from fastapi import HTTPException
@@ -154,21 +154,41 @@ def test_x_forwarded_for_used_as_client_ip():
 
 @pytest.mark.asyncio
 async def test_login_endpoint_returns_429_after_limit(client: AsyncClient):
-    payload = {"username": "admin", "password": "wrong"}
+    # V2 login uses email+password; use an invalid email to get consistent 401s
+    # before the rate limit kicks in — the 422 from schema validation would also
+    # consume a slot, but we want to exercise the 429 path clearly.
+    payload = {"email": "test@example.com", "password": "wrongpass1"}
     headers = {"x-forwarded-for": "55.55.55.55"}
 
-    for _ in range(5):
-        await client.post("/auth/login", json=payload, headers=headers)
+    with patch("src.services.auth_service.db_users.get_user_by_email", return_value=None):
+        for _ in range(5):
+            await client.post("/auth/login", json=payload, headers=headers)
 
-    resp = await client.post("/auth/login", json=payload, headers=headers)
+        resp = await client.post("/auth/login", json=payload, headers=headers)
     assert resp.status_code == 429
     assert "Retry-After" in resp.headers
 
 
 @pytest.mark.asyncio
 async def test_login_endpoint_allows_under_limit(client: AsyncClient):
-    payload = {"username": "admin", "password": "admin"}
-    headers = {"x-forwarded-for": "66.66.66.66"}
+    from unittest.mock import MagicMock
 
-    resp = await client.post("/auth/login", json=payload, headers=headers)
+    fake_user = {
+        "id": "user_rl_test",
+        "email": "ok@example.com",
+        "password_hash": "",
+        "is_active": True,
+    }
+    mock_db = MagicMock()
+    mock_db.collection.return_value.document.return_value.set.return_value = None
+
+    headers = {"x-forwarded-for": "66.66.66.66"}
+    payload = {"email": "ok@example.com", "password": "goodpassword1"}
+
+    with (
+        patch("src.services.auth_service.db_users.get_user_by_email", return_value=fake_user),
+        patch("src.services.auth_service.verify_password", return_value=True),
+        patch("src.db.sessions.db", mock_db),
+    ):
+        resp = await client.post("/auth/login", json=payload, headers=headers)
     assert resp.status_code == 200

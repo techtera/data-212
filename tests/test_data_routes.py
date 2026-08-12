@@ -49,38 +49,85 @@ async def test_sign_upload_different_ids_each_call(client: AsyncClient, auth_hea
 
 
 async def test_login_valid_credentials_returns_token(client: AsyncClient, settings) -> None:
-    resp = await client.post(
-        "/auth/login",
-        json={"username": settings.admin_username, "password": settings.admin_password},
-    )
+    """V2: login with email+password returns access_token."""
+    fake_user = {
+        "id": "user_data_test",
+        "email": "admin@terafac.dev",
+        "password_hash": "",
+        "is_active": True,
+    }
+    from unittest.mock import MagicMock, patch
+
+    mock_db = MagicMock()
+    mock_db.collection.return_value.document.return_value.set.return_value = None
+    with (
+        patch("src.services.auth_service.db_users.get_user_by_email", return_value=fake_user),
+        patch("src.services.auth_service.verify_password", return_value=True),
+        patch("src.db.sessions.db", mock_db),
+    ):
+        resp = await client.post(
+            "/auth/login",
+            json={"email": "admin@terafac.dev", "password": "adminpass1"},
+        )
     assert resp.status_code == 200
     body = resp.json()
-    assert body["token"] == settings.admin_token
-    assert "expires_at" in body
+    assert "access_token" in body
+    assert "expires_in" in body
 
 
 async def test_login_wrong_password_returns_401(client: AsyncClient, settings) -> None:
-    resp = await client.post(
-        "/auth/login",
-        json={"username": settings.admin_username, "password": "wrong-password"},
-    )
+    from unittest.mock import patch
+
+    fake_user = {
+        "id": "user_data_test",
+        "email": "admin@terafac.dev",
+        "password_hash": "",
+        "is_active": True,
+    }
+    with (
+        patch("src.services.auth_service.db_users.get_user_by_email", return_value=fake_user),
+        patch("src.services.auth_service.verify_password", return_value=False),
+    ):
+        resp = await client.post(
+            "/auth/login",
+            json={"email": "admin@terafac.dev", "password": "wrong-password"},
+        )
     assert resp.status_code == 401
 
 
 async def test_login_wrong_username_returns_401(client: AsyncClient, settings) -> None:
-    resp = await client.post(
-        "/auth/login",
-        json={"username": "nobody", "password": settings.admin_password},
-    )
+    """V2: unknown email returns 401 (same as wrong password — no enumeration)."""
+    from unittest.mock import patch
+
+    with patch("src.services.auth_service.db_users.get_user_by_email", return_value=None):
+        resp = await client.post(
+            "/auth/login",
+            json={"email": "nobody@terafac.dev", "password": "anypassword"},
+        )
     assert resp.status_code == 401
 
 
 async def test_login_no_auth_header_required(client: AsyncClient, settings) -> None:
     """Login endpoint must NOT require a Bearer token (it IS the token-issuing endpoint)."""
-    resp = await client.post(
-        "/auth/login",
-        json={"username": settings.admin_username, "password": settings.admin_password},
-    )
+    fake_user = {
+        "id": "user_data_test",
+        "email": "admin@terafac.dev",
+        "password_hash": "",
+        "is_active": True,
+    }
+    from unittest.mock import MagicMock, patch
+
+    mock_db = MagicMock()
+    mock_db.collection.return_value.document.return_value.set.return_value = None
+    with (
+        patch("src.services.auth_service.db_users.get_user_by_email", return_value=fake_user),
+        patch("src.services.auth_service.verify_password", return_value=True),
+        patch("src.db.sessions.db", mock_db),
+    ):
+        resp = await client.post(
+            "/auth/login",
+            json={"email": "admin@terafac.dev", "password": "adminpass1"},
+        )
     assert resp.status_code == 200
 
 
