@@ -53,6 +53,17 @@ def require_auth(
     if not raw_token:
         raise _UNAUTHORIZED
 
+    # ── Strip accidental "Bearer " prefix ─────────────────────────────────────
+    # Swagger UI users often paste "Bearer <token>" into the authorize dialog,
+    # but the HTTPBearer scheme already strips the outer "Bearer " from the
+    # Authorization header.  This results in credentials.credentials containing
+    # "Bearer <actual-token>" (double-prefixed).  Gracefully handle it.
+    if raw_token.lower().startswith("bearer "):
+        raw_token = raw_token[7:].strip()
+
+    if not raw_token:
+        raise _UNAUTHORIZED
+
     # ── Dev-token fallback (explicitly opt-in, default off) ───────────────────
     if settings.allow_dev_token and raw_token == settings.admin_token:
         request.state.user_id = "dev-admin"

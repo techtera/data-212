@@ -23,7 +23,7 @@ logger = logging.getLogger("terafac")
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
-    logger.info("TERAFAC backend starting — Phase 1 (FE → BE → Firestore)")
+    logger.info("TERAFAC backend starting — V2 (session auth, rate-limit, quota)")
     yield
     logger.info("TERAFAC backend shut down")
 
@@ -32,8 +32,8 @@ def create_app() -> FastAPI:
     """Application factory — returns a fully configured FastAPI instance."""
     app = FastAPI(
         title="TERAFAC Backend",
-        description="Phase 1: FE → BE → Firestore with hardcoded auth and inline stubs.",
-        version="0.1.0",
+        description="V2: Session-based auth, bcrypt passwords, per-user quota, rate limiting.",
+        version="0.2.0",
         lifespan=lifespan,
     )
 
