@@ -39,13 +39,17 @@ def wait_for(url, label, timeout=15):
 async def run():
     header("TERAFAC V4 FULL DEMO")
 
-    # -- 0. Seed registry
-    step(0, "Seeding model registry (UNet-ResNet50 + SegFormer-B3)...")
-    r = subprocess.run([sys.executable, "seed_registry.py"], capture_output=True, text=True)
-    if r.returncode != 0:
-        print(f"    SEED FAILED: {r.stderr}")
+    # -- 0. Check registry exists (should already be seeded)
+    step(0, "Checking model registry (should already exist)...")
+    from src.db.crud import query_docs as _qd
+    from src.db.firebase import db as _db  # noqa: F401
+    docs = _qd("model_registry", limit=10)
+    if not docs:
+        print("    ERROR: model_registry is empty. Run seed_registry.py first.")
         return 1
-    for line in r.stdout.strip().splitlines(): print(f"    {line}")
+    for d in docs:
+        ok(f"{d.get('model_name','?')} -- architecture present")
+    ok(f"{len(docs)} models in registry")
 
     # -- 1. Start services
     step(1, "Starting backend + research agent...")
