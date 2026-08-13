@@ -15,6 +15,7 @@ class CreateJobRequest(BaseModel):
                 {
                     "prompt": "train a segmentation model on my dataset",
                     "dataset_object_path": "datasets/ds_abc123/raw.zip",
+                    "dataset_description": "500 aerial images of urban buildings at 0.3m GSD",
                 }
             ]
         }
@@ -22,6 +23,7 @@ class CreateJobRequest(BaseModel):
 
     prompt: str
     dataset_object_path: str
+    dataset_description: str = ""  # V4: human-readable description for research agent
 
 
 class CreateJobResponse(BaseModel):
@@ -64,6 +66,10 @@ class JobProgress(BaseModel):
     total_epochs: int | None = None
     stage_failed: str | None = None
     log_excerpt: str | None = None
+    # V4: Research agent findings — populated after researching stage completes
+    research_findings: str | None = None
+    risk_tier: str | None = None  # "low" | "medium" | "high"
+    risk_reasoning: str | None = None
 
 
 # ── M4 action response shapes ─────────────────────────────────────────────────
@@ -82,7 +88,7 @@ class AnnotationsResponse(BaseModel):
     """POST /jobs/{id}/annotations  →  matches FE AnnotationsResponse."""
 
     ok: bool
-    stage: str  # "awaiting_approval"
+    stage: str  # "researching" (V4) — was "awaiting_approval" in V1-V3
 
 
 class ApproveResponse(BaseModel):

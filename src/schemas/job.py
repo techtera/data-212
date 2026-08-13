@@ -15,6 +15,7 @@ class JobStatus(StrEnum):
     pre_masking = "pre_masking"
     awaiting_annotation = "awaiting_annotation"
     annotating = "annotating"
+    researching = "researching"
     awaiting_approval = "awaiting_approval"
     approved = "approved"
     training = "training"

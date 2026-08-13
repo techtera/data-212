@@ -33,6 +33,11 @@ class Settings(BaseSettings):
     jwt_hop_audience: str = "terafac-worker"
     jwt_hop_ttl_seconds: int = 300  # 5 minutes
 
+    # V4: Research agent settings
+    research_agent_url: str = "http://localhost:8001/run"  # Cloud Run URL in prod
+    gemini_api_key: str = ""  # loaded from GEMINI_API_KEY env var (Secret Manager in prod)
+    research_timeout_seconds: int = 60  # max time to wait for research agent response
+
     # CORS
     cors_origins: str = "http://localhost:3100,http://localhost:3000"
 

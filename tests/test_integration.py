@@ -242,7 +242,7 @@ async def test_submit_annotations(client: AsyncClient) -> None:
     assert resp.status_code == 200
     body = resp.json()
     assert body["ok"] is True
-    assert body["stage"] == "awaiting_approval"
+    assert body["stage"] == "researching"
 
 
 # ── 10. Poll job — awaiting_approval ──────────────────────────────────────────

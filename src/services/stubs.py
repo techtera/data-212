@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import random
+from concurrent.futures import ThreadPoolExecutor
 
 from src.db.crud import update_doc
 from src.schemas.job import JobStatus
@@ -12,9 +13,11 @@ logger = logging.getLogger(__name__)
 COLLECTION = "jobs"
 
 # ── Timing constants (seconds) — easy to override in tests via monkeypatch ────
-PRE_MASKING_DELAY: float = 4.0
-EPOCH_DELAY: float = 2.0
-TOTAL_EPOCHS: int = 10
+PRE_MASKING_DELAY: float = 3.0
+EPOCH_DELAY: float = 0.5
+TOTAL_EPOCHS: int = 5
+
+_executor = ThreadPoolExecutor(max_workers=2)
 
 
 # ── Epoch metrics generator (matches MSW mock formula) ────────────────────────
@@ -56,20 +59,19 @@ async def run_pre_masking(job_id: str) -> None:
 
     Waits PRE_MASKING_DELAY seconds (simulating a pretrained-checkpoint run),
     then advances the job to awaiting_annotation.
-
-    This function is spawned as a FastAPI BackgroundTask immediately after the
-    job document is created.  It runs concurrently in the same uvicorn event
-    loop — no thread pool, no Celery.
     """
     logger.info("Job %s: pre_masking started (%.1fs delay)", job_id, PRE_MASKING_DELAY)
     await asyncio.sleep(PRE_MASKING_DELAY)
 
-    update_doc(
+    loop = asyncio.get_event_loop()
+    await loop.run_in_executor(
+        _executor,
+        update_doc,
         COLLECTION,
         job_id,
         {"status": JobStatus.awaiting_annotation.value},
     )
-    logger.info("Job %s: → awaiting_annotation", job_id)
+    logger.info("Job %s: -> awaiting_annotation", job_id)
 
 
 async def run_training(job_id: str) -> None:
@@ -81,13 +83,11 @@ async def run_training(job_id: str) -> None:
 
     After all epochs completes, advances the job to done and writes final
     metrics + canned sample predictions.
-
-    This function is spawned as a FastAPI BackgroundTask after the user
-    approves the job (wired in M4).
     """
     logger.info("Job %s: training started (%d epochs)", job_id, TOTAL_EPOCHS)
 
     epoch_metrics_list: list[dict] = []  # type: ignore[type-arg]
+    loop = asyncio.get_event_loop()
 
     for epoch in range(1, TOTAL_EPOCHS + 1):
         await asyncio.sleep(EPOCH_DELAY)
@@ -95,29 +95,22 @@ async def run_training(job_id: str) -> None:
         metrics = _epoch_metrics(epoch)
         epoch_metrics_list.append(metrics)
 
-        update_doc(
-            COLLECTION,
-            job_id,
-            {
-                "epoch": epoch,
-                "epoch_metrics": epoch_metrics_list,
-                # Live compute stats (canned random — same range as MSW mock)
-                "vram_used_mb": 18000 + random.randint(0, 2000),
-                "gpu_util_pct": 70 + random.randint(0, 20),
-            },
-        )
+        payload = {
+            "epoch": epoch,
+            "epoch_metrics": epoch_metrics_list,
+            "vram_used_mb": 18000 + random.randint(0, 2000),
+            "gpu_util_pct": 70 + random.randint(0, 20),
+        }
+        await loop.run_in_executor(_executor, update_doc, COLLECTION, job_id, payload)
         logger.info("Job %s: epoch %d/%d complete", job_id, epoch, TOTAL_EPOCHS)
 
     # Training complete — write final state
-    update_doc(
-        COLLECTION,
-        job_id,
-        {
-            "status": JobStatus.done.value,
-            "epoch": TOTAL_EPOCHS,
-            "final_metrics": _canned_final_metrics(),
-            "vram_used_mb": 0,
-            "gpu_util_pct": 0,
-        },
-    )
-    logger.info("Job %s: → done", job_id)
+    final_payload = {
+        "status": JobStatus.done.value,
+        "epoch": TOTAL_EPOCHS,
+        "final_metrics": _canned_final_metrics(),
+        "vram_used_mb": 0,
+        "gpu_util_pct": 0,
+    }
+    await loop.run_in_executor(_executor, update_doc, COLLECTION, job_id, final_payload)
+    logger.info("Job %s: -> done", job_id)

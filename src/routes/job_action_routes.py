@@ -41,17 +41,27 @@ async def submit_annotations(
     job_id: str,
     body: AnnotationsRequest,
 ) -> AnnotationsResponse:
-    """Accept the annotation upload acknowledgement and advance to awaiting_approval.
+    """Accept the annotation upload acknowledgement and advance to researching.
 
     The FE sends { "ack": true } (JSON body).  No real COCO zip is processed in V1.
     Guard: job must be in awaiting_annotation — returns 409 otherwise.
+
+    V4: After advancing to researching, a research-scoped hop token is minted
+    and the research task is dispatched via the broker. The research agent will
+    call Gemini, score risk, and advance the job to awaiting_approval.
     """
     try:
-        return job_service.submit_annotations(job_id)
+        result = job_service.submit_annotations(job_id)
     except KeyError as exc:
         raise _not_found(job_id) from exc
     except ValueError as exc:
         raise _wrong_stage(str(exc)) from exc
+
+    # Dispatch research task via broker with a research-scoped hop token
+    token = issue_hop_token(job_id, step="research")
+    broker = get_broker()
+    await broker.enqueue(BrokerTask(job_id=job_id, task_type="research", hop_token=token))
+    return result
 
 
 # ── POST /jobs/{job_id}/approve ───────────────────────────────────────────────

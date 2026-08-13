@@ -257,7 +257,7 @@ async def test_e2e_submit_annotations(client: AsyncClient, auth_headers: dict):
     assert resp.status_code == 200
     body = resp.json()
     assert body["ok"] is True
-    assert body["stage"] == "awaiting_approval"
+    assert body["stage"] == "researching"
 
 
 # ── 7. Poll — awaiting_approval ───────────────────────────────────────────────

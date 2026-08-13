@@ -39,6 +39,8 @@ def _compute_progress(stage: str, epoch: int | None, total_epochs: int | None) -
             return 25
         case "awaiting_annotation":
             return 50
+        case "researching":
+            return 60
         case "awaiting_approval":
             return 75
         case "training":
@@ -65,6 +67,7 @@ def create_job(req: CreateJobRequest, owner_id: str = "") -> CreateJobResponse:
     payload = {
         "prompt": req.prompt,
         "dataset_object_path": req.dataset_object_path,
+        "dataset_description": req.dataset_description,
         "status": JobStatus.pre_masking.value,
         "owner_id": owner_id,  # V2: scopes the job to the creating user
         "risk_tier": None,
@@ -104,6 +107,11 @@ def get_job_progress(job_id: str) -> JobProgress | None:
         unannotated = data.get("unannotated_count")
         annotated = data.get("annotated_count")
 
+    # V4: Include research findings when available (populated after researching stage)
+    research_findings: str | None = data.get("research_findings")
+    risk_tier: str | None = data.get("risk_tier")
+    risk_reasoning: str | None = data.get("risk_reasoning")
+
     return JobProgress(
         stage=stage,
         progress=progress,
@@ -114,6 +122,9 @@ def get_job_progress(job_id: str) -> JobProgress | None:
         total_epochs=total_epochs if stage == "training" else None,
         stage_failed=data.get("stage_failed"),
         log_excerpt=data.get("log_excerpt"),
+        research_findings=research_findings,
+        risk_tier=risk_tier,
+        risk_reasoning=risk_reasoning,
     )
 
 
@@ -157,28 +168,28 @@ def _require_stage(job_id: str, required: str) -> dict:  # type: ignore[type-arg
 
 
 def submit_annotations(job_id: str) -> AnnotationsResponse:
-    """Record that annotations have been uploaded and advance to awaiting_approval.
+    """Record that annotations have been uploaded and advance to researching.
 
     Guard: job must be in awaiting_annotation.
     In V1 the FE sends { ack: true } — no real COCO zip is processed here.
-    In V4 this will rasterise the COCO polygons and store them in GCS.
+    V4: After annotations are submitted, the broker dispatches the research agent
+    hop. The research agent returns findings which advance the job to
+    awaiting_approval. The route handler is responsible for enqueuing the
+    research task on the broker.
     """
     _require_stage(job_id, JobStatus.awaiting_annotation.value)
     update_doc(
         COLLECTION,
         job_id,
         {
-            "status": JobStatus.awaiting_approval.value,
+            "status": JobStatus.researching.value,
             "annotations_uploaded": True,
             "annotated_count": 4,  # canned — matches flagged image count
             "unannotated_count": 0,
-            # V1 stub risk tier — visible in the FE approval modal
-            "risk_tier": "medium",
-            "risk_reasoning": "Stub: medium risk assumed (V1). Real scoring in V4.",
         },
     )
-    logger.info("Job %s: annotations submitted → awaiting_approval", job_id)
-    return AnnotationsResponse(ok=True, stage=JobStatus.awaiting_approval.value)
+    logger.info("Job %s: annotations submitted → researching", job_id)
+    return AnnotationsResponse(ok=True, stage=JobStatus.researching.value)
 
 
 def approve_job(job_id: str) -> ApproveResponse:

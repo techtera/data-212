@@ -34,7 +34,7 @@ logger = logging.getLogger(__name__)
 
 class BrokerTask(BaseModel):
     job_id: str
-    task_type: str  # "pre_masking" | "training"
+    task_type: str  # "pre_masking" | "research" | "training"
     hop_token: str  # short-lived JWT issued by issue_hop_token
     payload: dict = {}  # type: ignore[type-arg]  # any extra context
 
@@ -99,6 +99,7 @@ class InMemoryBroker(BaseBroker):
         # Import stubs here (not at module top) to keep the import cycle clean
         # and allow tests to monkeypatch stubs before the worker runs.
         from src.services import stubs
+        from src.services.research_service import run_research
 
         while True:
             task = await self._queue.get()
@@ -108,6 +109,8 @@ class InMemoryBroker(BaseBroker):
 
                 if task.task_type == "pre_masking":
                     await stubs.run_pre_masking(task.job_id)
+                elif task.task_type == "research":
+                    await run_research(task.job_id, task.hop_token)
                 elif task.task_type == "training":
                     await stubs.run_training(task.job_id)
                 else:

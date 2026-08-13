@@ -17,8 +17,8 @@ from src.schemas.fe_contract import (
 async def test_annotations_returns_200_awaiting_approval(
     client: AsyncClient, auth_headers: dict
 ) -> None:
-    """POST annotations on a job in awaiting_annotation must return 200 + awaiting_approval."""
-    mock_resp = AnnotationsResponse(ok=True, stage="awaiting_approval")
+    """POST annotations on a job in awaiting_annotation must return 200 + researching."""
+    mock_resp = AnnotationsResponse(ok=True, stage="researching")
 
     with patch(
         "src.routes.job_action_routes.job_service.submit_annotations",
@@ -33,7 +33,7 @@ async def test_annotations_returns_200_awaiting_approval(
     assert resp.status_code == 200
     body = resp.json()
     assert body["ok"] is True
-    assert body["stage"] == "awaiting_approval"
+    assert body["stage"] == "researching"
 
 
 async def test_annotations_wrong_stage_returns_409(client: AsyncClient, auth_headers: dict) -> None:
@@ -282,9 +282,9 @@ def test_service_submit_annotations_updates_firestore() -> None:
         result = submit_annotations("job_001")
 
     assert result.ok is True
-    assert result.stage == "awaiting_approval"
+    assert result.stage == "researching"
     payload = mock_update.call_args[0][2]
-    assert payload["status"] == "awaiting_approval"
+    assert payload["status"] == "researching"
     assert payload["annotations_uploaded"] is True
 
 
