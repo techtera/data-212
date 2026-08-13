@@ -115,14 +115,129 @@ async def call_research_agent(
                 risk_tier=data.get("risk_tier", "medium"),
             )
     except Exception:
-        # Log error metadata only — never the hop token
-        logger.warning(
-            "Research agent call failed for job_id=%s (details suppressed)",
+        # Research agent unreachable — force manual review (fail-safe)
+        # NEVER bypass the container — security requires independent hop token verification
+        logger.error(
+            "Research agent UNREACHABLE for job_id=%s — ensure agent is running on %s",
             job_id,
+            url,
         )
-        # Return a safe fallback that forces human review
         return ResearchFindings(
-            findings="Research agent unreachable. Manual review required.",
+            findings=(
+                "RESEARCH AGENT UNREACHABLE. The research agent container must be running "
+                f"at {url} for security verification. Start it with:\n\n"
+                "  python cloud_run/research_agent/main.py\n\n"
+                "Manual review required until agent is available."
+            ),
+            risk_score=0.9,
+            confidence=0.1,
+            risk_tier="high",
+        )
+
+
+async def _inline_gemini_fallback(
+    job_id: str, hop_token: str, registry_context: dict | None = None
+) -> ResearchFindings:
+    """Fallback: call Gemini directly from backend when research agent is unreachable.
+
+    This runs ONLY when the Cloud Run research agent container is not available
+    (e.g. local dev without starting the agent separately). In production the
+    agent container should always be reachable.
+    """
+    settings = get_settings()
+    if not settings.gemini_api_key:
+        return ResearchFindings(
+            findings="Research agent unreachable and no GEMINI_API_KEY configured.",
+            risk_score=0.9,
+            confidence=0.1,
+            risk_tier="high",
+        )
+
+    logger.info("Job %s: inline Gemini fallback (agent unreachable)", job_id)
+
+    try:
+        import json as _json
+
+        import google.generativeai as genai
+
+        genai.configure(api_key=settings.gemini_api_key)
+        model = genai.GenerativeModel("gemini-3-flash-preview")
+
+        # Build architecture description
+        models_desc = ""
+        available = (registry_context or {}).get("available_architectures", [])
+        if available:
+            models_desc = "\n\nAVAILABLE MODEL ARCHITECTURES:\n"
+            for m in available:
+                models_desc += f"\n--- {m.get('model_name', '?')} ---\n"
+                models_desc += f"Architecture:\n{_json.dumps(m.get('architecture', {}), indent=2)}\n"
+
+        prompt = (registry_context or {}).get("prompt", "")
+
+        system_prompt = """You are a senior ML research agent for the TERAFAC auto-training pipeline.
+Analyze the training request and recommend the best model architecture.
+
+You must:
+1. Analyze the user's training prompt
+2. Review available model architectures
+3. SELECT the best existing architecture OR PROPOSE modifications
+4. Provide risk assessment
+
+Response MUST be valid JSON:
+{
+  "findings": "3-5 sentence analysis",
+  "risk_score": 0.0 to 1.0,
+  "confidence": 0.0 to 1.0,
+  "recommended_architecture": "model name",
+  "architecture_reasoning": "why this is best",
+  "proposed_config": {}
+}"""
+
+        user_msg = f"TRAINING REQUEST:\nPrompt: {prompt}\n{models_desc}\n\nRecommend the best approach."
+
+        import asyncio
+
+        loop = asyncio.get_event_loop()
+        response = await loop.run_in_executor(
+            None,
+            lambda: model.generate_content(
+                [system_prompt, user_msg],
+                generation_config=genai.GenerationConfig(
+                    response_mime_type="application/json",
+                    temperature=0.3,
+                ),
+            ),
+        )
+
+        result = _json.loads(response.text)
+
+        findings = result.get("findings", "Analysis complete.")
+        rec_arch = result.get("recommended_architecture", "")
+        arch_reasoning = result.get("architecture_reasoning", "")
+        proposed_config = result.get("proposed_config", {})
+
+        full_findings = f"{findings}\n\nRECOMMENDED ARCHITECTURE: {rec_arch}\nREASONING: {arch_reasoning}\n"
+        if proposed_config:
+            full_findings += f"PROPOSED CONFIG OVERRIDES: {_json.dumps(proposed_config, indent=2)}\n"
+
+        risk_score = float(result.get("risk_score", 0.3))
+        if risk_score < 0.3:
+            risk_tier = "low"
+        elif risk_score < 0.7:
+            risk_tier = "medium"
+        else:
+            risk_tier = "high"
+
+        return ResearchFindings(
+            findings=full_findings,
+            risk_score=risk_score,
+            confidence=float(result.get("confidence", 0.8)),
+            risk_tier=risk_tier,
+        )
+    except Exception as e:
+        logger.warning("Inline Gemini fallback failed: %s: %s", type(e).__name__, str(e)[:100])
+        return ResearchFindings(
+            findings=f"Research failed ({type(e).__name__}). Manual review required.",
             risk_score=0.9,
             confidence=0.1,
             risk_tier="high",

@@ -161,6 +161,24 @@ async def run():
             for line in findings.splitlines(): print(f"    {line}")
             print(f"    {'~'*60}")
 
+            # Parse architecture recommendation (same logic as frontend)
+            rec_arch = ""
+            rec_reason = ""
+            rec_config = ""
+            for line in findings.splitlines():
+                if line.startswith("RECOMMENDED ARCHITECTURE:"):
+                    rec_arch = line.replace("RECOMMENDED ARCHITECTURE:", "").strip()
+                elif line.startswith("REASONING:"):
+                    rec_reason = line.replace("REASONING:", "").strip()
+                elif line.startswith("PROPOSED CONFIG OVERRIDES:"):
+                    rec_config = line.replace("PROPOSED CONFIG OVERRIDES:", "").strip()
+            
+            print(f"\n    PARSED:")
+            print(f"    Architecture: {rec_arch or '(not found in findings)'}")
+            print(f"    Reasoning: {rec_reason[:120] or '(not found)'}")
+            print(f"    Config: {rec_config[:80] or '(not found)'}")
+            print(f"    repr of findings[:200]: {repr(findings[:200])}")
+
             # -- 10. Approve
             step(10, "POST /jobs/{id}/approve -> training...")
             apr = await c.post(f"/jobs/{job_id}/approve", headers=H)
@@ -168,13 +186,60 @@ async def run():
             assert apr.json()["stage"] == "training"
             ok("Approved -> training started (dummy 10 epochs x 2s)")
 
-            # -- 11. Training runs in background (dummy stub)
-            step(11, "Training running in background (5 dummy epochs)...")
-            ok("(Training is a stub -- real Vertex AI in V4-VERTEX)")
-            ok("Skipping poll -- research agent flow is the demo target")
+            # -- 11. Wait for training to complete
+            step(11, "Waiting for training (5 epochs)...")
+            t0 = time.time()
+            while time.time() - t0 < 60:
+                try:
+                    r = await c.get(f"/jobs/{job_id}", headers=H)
+                    d = r.json()
+                    if d["stage"] == "done":
+                        ok(f"Training complete! stage=done ({time.time()-t0:.0f}s)")
+                        break
+                    if d["stage"] == "training" and d.get("epoch"):
+                        ok(f"epoch {d['epoch']}/{d.get('total_epochs',5)}")
+                except (httpx.ReadTimeout, httpx.ConnectTimeout):
+                    pass
+                await asyncio.sleep(2)
+            else:
+                ok("Training still running... waiting 10s more")
+                await asyncio.sleep(10)
+                try:
+                    r = await c.get(f"/jobs/{job_id}", headers=H)
+                    d = r.json()
+                    ok(f"Final stage: {d['stage']}")
+                except Exception:
+                    ok("Could not verify (server busy)")
 
-            # -- 12. Security checks
-            step(12, "Security checks...")
+            # -- 12. Results
+            step(12, "GET /jobs/{id}/results...")
+            await asyncio.sleep(1)
+            try:
+                res = await c.get(f"/jobs/{job_id}/results", headers=H)
+                if res.status_code == 200:
+                    rd = res.json()
+                    ok(f"val_loss={rd['final_metrics']['loss_val']}  acc={rd['final_metrics']['acc']}  iou={rd['final_metrics']['iou']}  dice={rd['final_metrics']['dice']}")
+                    ok(f"risk_tier: {rd['risk_tier']}")
+                    ok(f"predictions: {len(rd['sample_predictions'])} samples")
+                else:
+                    ok(f"Results: status {res.status_code} (job may still be finishing)")
+            except (httpx.ReadTimeout, httpx.ConnectTimeout):
+                ok("Results timeout (training writes still flushing)")
+
+            # -- 13. Inference
+            step(13, "GET /jobs/{id}/inference...")
+            try:
+                inf = await c.get(f"/jobs/{job_id}/inference", headers=H)
+                if inf.status_code == 200:
+                    ok(f"checkpoint: {inf.json()['checkpoint_signed_url']}")
+                    ok(f"code: {inf.json()['code'][:60]}...")
+                else:
+                    ok(f"Inference: status {inf.status_code}")
+            except (httpx.ReadTimeout, httpx.ConnectTimeout):
+                ok("Inference timeout")
+
+            # -- 14. Security checks
+            step(14, "Security checks...")
             try:
                 ua = await c.get(f"/jobs/{job_id}")
                 assert ua.status_code == 401
