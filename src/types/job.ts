@@ -1,6 +1,7 @@
 export type Stage =
   | "pre_masking"
   | "awaiting_annotation"
+  | "researching"
   | "awaiting_approval"
   | "training"
   | "done"
@@ -37,6 +38,10 @@ export interface JobProgress {
   total_epochs?: number;
   stage_failed?: string;
   log_excerpt?: string;
+  // V4: Research agent findings — populated after researching stage completes
+  research_findings?: string;
+  risk_tier?: string;
+  risk_reasoning?: string;
 }
 
 export interface CreateJobRequest {

@@ -7,7 +7,6 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogHeader, DialogTitle, DialogDescription, DialogContent, DialogFooter } from "@/components/ui/dialog";
 import { toast } from "sonner";
-import { cn } from "@/lib/utils";
 
 interface ApprovalModalProps {
   open: boolean;
@@ -23,19 +22,11 @@ const riskTierColors: Record<string, "default" | "destructive" | "warning" | "su
 };
 
 export function ApprovalModal({ open, onClose, jobId }: ApprovalModalProps) {
-  const [findings, setFindings] = React.useState<string>("");
-  const [riskTier, setRiskTier] = React.useState<"low"|"medium"|"high"|"auto">("auto");
+  // Read research findings directly from the job store (populated by backend via polling)
+  const researchFindings = useJobStore((s) => s.job?.research_findings);
+  const riskTier = useJobStore((s) => s.job?.risk_tier ?? "auto");
+  const riskReasoning = useJobStore((s) => s.job?.risk_reasoning);
   const [loading, setLoading] = React.useState(false);
-
-  // In a real app, fetch research findings from BE. For mock, we can simulate.
-  React.useEffect(() => {
-    if (open) {
-      // Mock data
-      // eslint-disable-next-line react-hooks/set-state-in-effect
-      setFindings("Research agent reviewed the dataset and model config. No major safety concerns detected. Confidence: high.");
-      setRiskTier("low");
-    }
-  }, [open]);
 
   const handleApprove = async () => {
     setLoading(true);
@@ -69,21 +60,25 @@ export function ApprovalModal({ open, onClose, jobId }: ApprovalModalProps) {
         <DialogHeader>
           <DialogTitle>Approval Required</DialogTitle>
           <DialogDescription>
-            Research agent has completed its review. Please approve or reject to continue.
+            Research agent has completed its analysis. Review the findings below and approve or reject.
           </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-4 mt-4">
           <div>
             <h4 className="mb-2 font-medium">Research Findings</h4>
-            <p className="text-sm text-muted-foreground whitespace-pre-wrap">{findings || "Loading…"}</p>
+            <p className="text-sm text-muted-foreground whitespace-pre-wrap">
+              {researchFindings || "Loading research findings..."}
+            </p>
           </div>
 
           <div>
             <h4 className="mb-2 font-medium">Risk Assessment</h4>
             <div className="flex items-center gap-3">
-              <Badge variant={riskTierColors[riskTier]}>Risk Tier: {riskTier}</Badge>
-              <span className="text-sm text-muted-foreground">Score derived from model complexity, data sensitivity, and deployment context.</span>
+              <Badge variant={riskTierColors[riskTier] ?? "info"}>Risk Tier: {riskTier}</Badge>
+              <span className="text-sm text-muted-foreground">
+                {riskReasoning || "Score derived from model complexity, data sensitivity, and deployment context."}
+              </span>
             </div>
           </div>
         </div>
@@ -96,7 +91,7 @@ export function ApprovalModal({ open, onClose, jobId }: ApprovalModalProps) {
             Reject
           </Button>
           <Button onClick={handleApprove} disabled={loading}>
-            {loading ? "Approving…" : "Approve"}
+            {loading ? "Approving..." : "Approve"}
           </Button>
         </DialogFooter>
       </DialogContent>

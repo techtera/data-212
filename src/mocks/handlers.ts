@@ -32,6 +32,7 @@ import type {
 const STAGE_FLOW = [
   "pre_masking",
   "awaiting_annotation",
+  "researching",
   "awaiting_approval",
   "training",
   "done",
@@ -50,6 +51,8 @@ interface MockJob {
   total_epochs: number;
   dataset_object_path: string;
   annotations_uploaded: boolean;
+  research_findings: string | null;
+  risk_reasoning: string | null;
 }
 
 const INITIAL_FLAGGED: FlaggedImage[] = [
@@ -87,6 +90,8 @@ function seedJob(
     total_epochs: 10,
     dataset_object_path,
     annotations_uploaded: false,
+    research_findings: null,
+    risk_reasoning: null,
   };
   jobs.set(job.job_id, job);
   return job;
@@ -99,6 +104,21 @@ function autoAdvance(j: MockJob) {
 
   // PAUSE at user-interaction stages - only advance via explicit POST calls
   if (j.stage === "awaiting_annotation" || j.stage === "awaiting_approval") return;
+
+  // researching auto-advances after 4s (simulating research agent completing)
+  if (j.stage === "researching") {
+    j.stage = "awaiting_approval";
+    j.last_transition_at = now;
+    j.risk_tier = "low";
+    j.research_findings =
+      `Research agent reviewed the dataset and model configuration for job ${j.job_id}. ` +
+      `Prompt: '${j.prompt}'. Analysis: The proposed training configuration uses standard ` +
+      "segmentation architecture with no unusual data sources. Dataset size and complexity " +
+      "are within normal parameters. No safety concerns detected. Recommendation: Proceed.";
+    j.risk_reasoning =
+      "Risk tier: low (score: 0.30, confidence: 0.85). Standard segmentation task, no adversarial patterns.";
+    return;
+  }
 
   const nextIdx = STAGE_FLOW.indexOf(
     j.stage as (typeof STAGE_FLOW)[number]
@@ -213,7 +233,9 @@ export const handlers = [
               ? 25
               : j.stage === "awaiting_annotation"
                 ? 50
-                : 75,
+                : j.stage === "researching"
+                  ? 60
+                  : 75,
       epoch: j.stage === "training" ? j.epoch : undefined,
       total_epochs: j.stage === "training" ? j.total_epochs : undefined,
       unannotated_count:
@@ -222,6 +244,10 @@ export const handlers = [
         j.stage === "awaiting_annotation" ? j.annotated_count : undefined,
       flagged:
         j.stage === "awaiting_annotation" ? INITIAL_FLAGGED : undefined,
+      // V4: Include research findings when available
+      research_findings: j.research_findings ?? undefined,
+      risk_tier: j.risk_tier ?? undefined,
+      risk_reasoning: j.risk_reasoning ?? undefined,
     };
     return HttpResponse.json(progress);
   }),
@@ -249,9 +275,9 @@ export const handlers = [
     j.annotations_uploaded = true;
     j.unannotated_count = 0;
     j.annotated_count = INITIAL_FLAGGED.length;
-    j.stage = "training";
+    // V4: Annotations → researching (research agent runs) → awaiting_approval
+    j.stage = "researching";
     j.last_transition_at = Date.now();
-    j.epoch = 1;
     const body: AnnotationsResponse = { ok: true, stage: j.stage };
     return HttpResponse.json(body);
   }),

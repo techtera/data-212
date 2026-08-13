@@ -7,6 +7,7 @@ const STAGE_VARIANTS: Record<
 > = {
   pre_masking: "info",
   awaiting_annotation: "warning",
+  researching: "info",
   awaiting_approval: "destructive",
   training: "info",
   done: "success",
@@ -17,6 +18,7 @@ const STAGE_VARIANTS: Record<
 const STAGE_LABEL: Record<Stage, string> = {
   pre_masking: "Pre-masking",
   awaiting_annotation: "Awaiting annotation",
+  researching: "Researching",
   awaiting_approval: "Awaiting approval",
   training: "Training",
   done: "Done",

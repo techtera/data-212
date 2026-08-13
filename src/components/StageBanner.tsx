@@ -29,8 +29,13 @@ const SPECS: Record<Stage, BannerSpec> = {
     accent: "amber",
     visible: () => true,
   },
+  researching: {
+    text: () => "Research agent analyzing dataset + model config...",
+    accent: "pulse-green",
+    visible: () => true,
+  },
   awaiting_approval: {
-    text: () => "Awaiting research + risk-tier decision",
+    text: () => "Awaiting human approval — review research findings",
     accent: "red",
     visible: () => true,
   },
