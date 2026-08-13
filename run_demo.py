@@ -51,8 +51,8 @@ async def run():
         ok(f"{d.get('model_name','?')} -- architecture present")
     ok(f"{len(docs)} models in registry")
 
-    # -- 1. Start services
-    step(1, "Starting backend + research agent...")
+    # -- 1. Start backend (research agent auto-starts from backend lifespan)
+    step(1, "Starting backend (research agent auto-starts)...")
     jwt_secret = os.environ.get("JWT_HOP_SECRET", "")
     gemini_key = os.environ.get("GEMINI_API_KEY", "")
     if not jwt_secret or len(jwt_secret) < 32:
@@ -61,21 +61,17 @@ async def run():
         print("    ERROR: GEMINI_API_KEY not set"); return 1
 
     python = os.path.join("venv", "Scripts", "python.exe")
-    agent_env = {**os.environ, "JWT_HOP_SECRET": jwt_secret, "JWT_HOP_ISSUER": "terafac-api",
-                 "JWT_HOP_AUDIENCE": "terafac-worker", "GEMINI_API_KEY": gemini_key,
-                 "PORT": "9000", "PYTHONIOENCODING": "utf-8"}
     backend_env = {**os.environ, "PYTHONIOENCODING": "utf-8"}
 
-    agent_proc = subprocess.Popen([python, "cloud_run/research_agent/main.py"],
-        env=agent_env, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     backend_proc = subprocess.Popen([python, "-m", "uvicorn", "src.main:app", "--port", "8000", "--timeout-keep-alive", "120"],
-        env=backend_env, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        env=backend_env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
     try:
-        if not wait_for(f"{AGENT}/health", "Agent"): return 1
-        ok("Research Agent :9000 ready")
-        if not wait_for(f"{BACKEND}/health", "Backend"): return 1
+        if not wait_for(f"{BACKEND}/health", "Backend", timeout=20): return 1
         ok("Backend :8000 ready")
+        # Agent is auto-started by backend lifespan — verify it
+        if not wait_for(f"{AGENT}/health", "Research Agent", timeout=10): return 1
+        ok("Research Agent :9000 ready (auto-started by backend)")
 
         async with httpx.AsyncClient(base_url=BACKEND, timeout=120) as c:
             # -- 2. Auth
@@ -99,9 +95,8 @@ async def run():
             step(4, "Create job: POST /jobs...")
             obj_path = sign.json()["object_path"]
             job = await c.post("/jobs", headers=H, json={
-                "prompt": "Train a semantic segmentation model to detect building footprints from high-resolution aerial RGB imagery. Must handle small irregular structures and partial occlusions from vegetation.",
+                "prompt": "Train a semantic segmentation model to detect building footprints from high-resolution aerial RGB imagery. Dataset: 640 aerial RGB images at 0.3m GSD, 512x512px, UAV at 120m. Binary labels: building=1, background=0. 18pct building coverage. Mixed urban/suburban with tree occlusion. Must handle small irregular structures and partial occlusions from vegetation.",
                 "dataset_object_path": obj_path,
-                "dataset_description": "640 aerial RGB images at 0.3m GSD, 512x512px, UAV at 120m. Binary labels: building=1, background=0. 18pct building coverage. Mixed urban/suburban with tree occlusion.",
             })
             assert job.status_code == 201, f"Create: {job.text}"
             job_id = job.json()["job_id"]
@@ -257,11 +252,8 @@ async def run():
 
     finally:
         backend_proc.terminate()
-        agent_proc.terminate()
-        try: backend_proc.wait(3)
+        try: backend_proc.wait(5)
         except: backend_proc.kill()
-        try: agent_proc.wait(3)
-        except: agent_proc.kill()
 
     header("DEMO COMPLETE - ALL VERIFIED")
     print(f"""
