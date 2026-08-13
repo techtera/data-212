@@ -15,7 +15,6 @@ class CreateJobRequest(BaseModel):
                 {
                     "prompt": "train a segmentation model on my dataset",
                     "dataset_object_path": "datasets/ds_abc123/raw.zip",
-                    "dataset_description": "500 aerial images of urban buildings at 0.3m GSD",
                 }
             ]
         }
@@ -23,7 +22,6 @@ class CreateJobRequest(BaseModel):
 
     prompt: str
     dataset_object_path: str
-    dataset_description: str = ""  # V4: human-readable description for research agent
 
 
 class CreateJobResponse(BaseModel):

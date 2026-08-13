@@ -75,7 +75,7 @@ async def run_pre_masking(job_id: str) -> None:
 
 
 async def run_training(job_id: str) -> None:
-    """Simulate a 10-epoch training run.
+    """Simulate a 5-epoch training run.
 
     For each epoch:
       - Sleeps EPOCH_DELAY seconds.
@@ -84,6 +84,14 @@ async def run_training(job_id: str) -> None:
     After all epochs completes, advances the job to done and writes final
     metrics + canned sample predictions.
     """
+    from src.db.crud import get_doc
+
+    # Safety check: only run if job is actually in training stage
+    doc = get_doc(COLLECTION, job_id)
+    if doc and doc.get("status") != "training":
+        logger.warning("Job %s: training aborted (status=%s, not 'training')", job_id, doc.get("status"))
+        return
+
     logger.info("Job %s: training started (%d epochs)", job_id, TOTAL_EPOCHS)
 
     epoch_metrics_list: list[dict] = []  # type: ignore[type-arg]

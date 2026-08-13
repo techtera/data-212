@@ -144,7 +144,6 @@ async def call_gemini(prompt: str, context: dict) -> dict:  # type: ignore[type-
                 arch = m.get("architecture", {})
                 models_description += f"Architecture:\n{_json.dumps(arch, indent=2)}\n"
 
-        dataset_desc = context.get("dataset_description", "")
         dataset_path = context.get("dataset_object_path", "")
 
         system_prompt = """You are a senior ML research agent for the TERAFAC auto-training pipeline.
@@ -169,7 +168,6 @@ Your response MUST be valid JSON with exactly these fields:
         user_msg = f"""TRAINING REQUEST:
 Prompt: {prompt}
 Dataset path: {dataset_path}
-Dataset description: {dataset_desc if dataset_desc else 'Aerial/satellite imagery for segmentation (building detection task)'}
 {models_description}
 
 Based on the above, analyze this request and recommend the best approach.

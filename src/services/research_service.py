@@ -201,8 +201,6 @@ async def run_research(job_id: str, hop_token: str) -> None:
     registry_context = {
         "prompt": data.get("prompt", ""),
         "dataset_object_path": data.get("dataset_object_path", ""),
-        "dataset_description": data.get("dataset_description", ""),
-        "flagged_images": data.get("flagged_images", []),
         "available_architectures": model_architectures,
     }
 

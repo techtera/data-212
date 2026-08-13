@@ -67,12 +67,11 @@ def create_job(req: CreateJobRequest, owner_id: str = "") -> CreateJobResponse:
     payload = {
         "prompt": req.prompt,
         "dataset_object_path": req.dataset_object_path,
-        "dataset_description": req.dataset_description,
         "status": JobStatus.pre_masking.value,
         "owner_id": owner_id,  # V2: scopes the job to the creating user
         "risk_tier": None,
         "epoch": None,
-        "total_epochs": 10,
+        "total_epochs": 5,
         "flagged_images": _CANNED_FLAGGED,
         "unannotated_count": len(_CANNED_FLAGGED),
         "annotated_count": 0,
