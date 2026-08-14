@@ -39,32 +39,21 @@ export function TrainTab() {
   const setActiveTab = useNavStore((s) => s.setActiveTab);
 
   const [submitting, setSubmitting] = useState(false);
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const uploadTimer = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const uploadDone = !isUploading && (uploadProgress ?? 0) >= 100 && Boolean(uploadedFileName);
   const promptValid = prompt.trim().length > 0;
   const fileValid = Boolean(uploadedFileName);
   const canStart =
-    promptValid && fileValid && uploadDone && !blocked && !submitting;
+    promptValid && fileValid && !blocked && !submitting;
 
   function startFakeUpload(file: File) {
     if (uploadTimer.current) clearInterval(uploadTimer.current);
-    setIsUploading(true);
-    setUploadProgress(0);
+    setSelectedFile(file);
     setUploadedFileName(file.name);
-
-    const startedAt = Date.now();
-    const durationMs = 1500;
-    uploadTimer.current = setInterval(() => {
-      const elapsed = Date.now() - startedAt;
-      const pct = Math.min(100, Math.round((elapsed / durationMs) * 100));
-      setUploadProgress(pct);
-      if (pct >= 100) {
-        if (uploadTimer.current) clearInterval(uploadTimer.current);
-        uploadTimer.current = null;
-        setIsUploading(false);
-      }
-    }, 80);
+    setUploadProgress(0);
+    setIsUploading(false);
   }
 
   function onPickFile(e: React.ChangeEvent<HTMLInputElement>) {
@@ -79,26 +68,31 @@ export function TrainTab() {
   }
 
   async function onStart() {
-    if (!canStart) return;
+    if (!canStart || !selectedFile) return;
     setSubmitting(true);
+    setIsUploading(true);
+    setUploadProgress(10);
     try {
-      const sign = await api.signUpload();
-      setDatasetPath(sign.object_path);
+      // Two-hop upload: sign → PUT directly to GCS (no auth header on PUT)
+      setUploadProgress(30);
+      const uploadResult = await api.uploadDataset(selectedFile);
+      setUploadProgress(80);
+      setDatasetPath(uploadResult.object_path);
 
-      await api.putRaw(sign.signed_put_url, new Blob(["mock-zip-bytes"]));
-      setUploadProgress(100);
-      setIsUploading(false);
-
+      // Create the job with the object_path from the signed upload
       const created = await api.createJob({
         prompt: prompt.trim(),
-        dataset_object_path: sign.object_path,
+        dataset_object_path: uploadResult.object_path,
       });
+      setUploadProgress(100);
+      setIsUploading(false);
 
       setActiveJobId(created.job_id);
       toast.success(`Job ${created.job_id} created — stage: ${created.stage}`);
       setActiveTab("annotate");
     } catch (err) {
       toast.error(`Failed to start job: ${String(err)}`);
+      setIsUploading(false);
     } finally {
       setSubmitting(false);
     }
