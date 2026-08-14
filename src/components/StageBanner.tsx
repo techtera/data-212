@@ -74,7 +74,7 @@ const ACCENT_CLASSES: Record<BannerSpec["accent"], string> = {
   muted: "border-zinc-500/40 bg-zinc-500/10 text-zinc-300",
 };
 
-export function StageBanner({ onReviewClick }: { onReviewClick?: () => void }) {
+export function StageBanner() {
   const stage = useJobStore((s) => s.job?.stage ?? null);
   const state = useJobStore.getState();
 
@@ -98,19 +98,11 @@ export function StageBanner({ onReviewClick }: { onReviewClick?: () => void }) {
     <div
       data-stage={stage}
       className={cn(
-        "mb-3 rounded-md border px-3 py-2 text-sm font-medium flex items-center justify-between",
+        "mb-3 rounded-md border px-3 py-2 text-sm font-medium",
         ACCENT_CLASSES[spec.accent]
       )}
     >
-      <span>{spec.text(state)}</span>
-      {onReviewClick && (
-        <button
-          onClick={onReviewClick}
-          className="ml-3 px-2 py-1 rounded bg-white/10 hover:bg-white/20 text-xs font-semibold"
-        >
-          Review &amp; Decide
-        </button>
-      )}
+      {spec.text(state)}
     </div>
   );
 }

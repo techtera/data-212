@@ -39,28 +39,20 @@ export function JobShell() {
   const activeTab = useNavStore((s) => s.activeTab);
   const setActiveTab = useNavStore((s) => s.setActiveTab);
   const [showApproval, setShowApproval] = React.useState(false);
-  const [userDismissed, setUserDismissed] = React.useState(false);
 
   useJobPolling(activeJobId);
 
   // Auto-open approval modal when stage becomes awaiting_approval
   React.useEffect(() => {
-    if (jobStage === "awaiting_approval" && activeJobId && !userDismissed) {
+    if (jobStage === "awaiting_approval" && activeJobId) {
       setShowApproval(true);
     } else if (jobStage !== "awaiting_approval") {
       setShowApproval(false);
-      setUserDismissed(false); // reset dismiss when stage changes
     }
-  }, [jobStage, activeJobId, userDismissed]);
+  }, [jobStage, activeJobId]);
 
   const handleApprovalClose = () => {
     setShowApproval(false);
-    setUserDismissed(true);
-  };
-
-  const handleReopenApproval = () => {
-    setUserDismissed(false);
-    setShowApproval(true);
   };
 
   return (
@@ -72,7 +64,7 @@ export function JobShell() {
         </p>
       </header>
 
-      <StageBanner onReviewClick={jobStage === "awaiting_approval" && !showApproval ? handleReopenApproval : undefined} />
+      <StageBanner />
 
       <Tabs
         value={activeTab}

@@ -28,6 +28,37 @@ export function ApprovalModal({ open, onClose, jobId }: ApprovalModalProps) {
   const riskReasoning = useJobStore((s) => s.job?.risk_reasoning);
   const [loading, setLoading] = React.useState(false);
 
+  // Parse findings to extract recommended architecture
+  const parsedFindings = React.useMemo(() => {
+    if (!researchFindings) return { analysis: "", architecture: "", reasoning: "", config: "" };
+    const lines = researchFindings.split("\n");
+    let analysis = "";
+    let architecture = "";
+    let reasoning = "";
+    let config = "";
+    let section = "analysis";
+
+    for (const line of lines) {
+      if (line.startsWith("RECOMMENDED ARCHITECTURE:")) {
+        architecture = line.replace("RECOMMENDED ARCHITECTURE:", "").trim();
+        section = "arch";
+      } else if (line.startsWith("REASONING:")) {
+        reasoning = line.replace("REASONING:", "").trim();
+        section = "reasoning";
+      } else if (line.startsWith("PROPOSED CONFIG OVERRIDES:")) {
+        config = line.replace("PROPOSED CONFIG OVERRIDES:", "").trim();
+        section = "config";
+      } else if (section === "analysis") {
+        analysis += line + "\n";
+      } else if (section === "reasoning" && line.trim()) {
+        reasoning += " " + line.trim();
+      } else if (section === "config") {
+        config += line + "\n";
+      }
+    }
+    return { analysis: analysis.trim(), architecture, reasoning: reasoning.trim(), config: config.trim() };
+  }, [researchFindings]);
+
   const handleApprove = async () => {
     setLoading(true);
     try {
@@ -55,8 +86,8 @@ export function ApprovalModal({ open, onClose, jobId }: ApprovalModalProps) {
   };
 
   return (
-    <Dialog open={open} onOpenChange={onClose}>
-      <DialogContent className="max-w-2xl">
+    <Dialog open={open} onOpenChange={() => {}}>
+      <DialogContent className="max-w-2xl [&>button]:hidden">
         <DialogHeader>
           <DialogTitle>Approval Required</DialogTitle>
           <DialogDescription>
@@ -64,13 +95,32 @@ export function ApprovalModal({ open, onClose, jobId }: ApprovalModalProps) {
           </DialogDescription>
         </DialogHeader>
 
-        <div className="space-y-4 mt-4">
+        <div className="space-y-4 mt-4 max-h-[60vh] overflow-y-auto">
+          {parsedFindings.architecture && (
+            <div className="rounded-md border border-emerald-500/30 bg-emerald-500/5 p-3">
+              <h4 className="mb-1 font-semibold text-emerald-300">Recommended Architecture</h4>
+              <p className="text-lg font-bold text-emerald-100">{parsedFindings.architecture}</p>
+              {parsedFindings.reasoning && (
+                <p className="mt-2 text-sm text-emerald-200/80">{parsedFindings.reasoning}</p>
+              )}
+            </div>
+          )}
+
           <div>
-            <h4 className="mb-2 font-medium">Research Findings</h4>
+            <h4 className="mb-2 font-medium">Analysis</h4>
             <p className="text-sm text-muted-foreground whitespace-pre-wrap">
-              {researchFindings || "Loading research findings..."}
+              {parsedFindings.analysis || researchFindings || "Loading research findings..."}
             </p>
           </div>
+
+          {parsedFindings.config && (
+            <div>
+              <h4 className="mb-2 font-medium">Proposed Config</h4>
+              <pre className="text-xs bg-zinc-900 rounded p-2 overflow-x-auto text-zinc-300">
+                {parsedFindings.config}
+              </pre>
+            </div>
+          )}
 
           <div>
             <h4 className="mb-2 font-medium">Risk Assessment</h4>
@@ -84,9 +134,6 @@ export function ApprovalModal({ open, onClose, jobId }: ApprovalModalProps) {
         </div>
 
         <DialogFooter>
-          <Button variant="outline" onClick={onClose} disabled={loading}>
-            Cancel
-          </Button>
           <Button variant="destructive" onClick={handleReject} disabled={loading}>
             Reject
           </Button>
