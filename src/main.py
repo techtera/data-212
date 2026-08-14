@@ -52,7 +52,9 @@ def _start_research_agent() -> subprocess.Popen | None:
     # Find the agent script
     agent_script = os.path.join(
         os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
-        "cloud_run", "research_agent", "main.py",
+        "cloud_run",
+        "research_agent",
+        "main.py",
     )
     if not os.path.exists(agent_script):
         logger.warning("Research agent script not found at %s — not auto-starting", agent_script)
@@ -93,6 +95,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     # Give agent time to boot
     if _research_agent_proc:
         import asyncio
+
         await asyncio.sleep(2)
 
     # V3: Start the broker worker loop

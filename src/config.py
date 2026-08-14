@@ -38,6 +38,11 @@ class Settings(BaseSettings):
     gemini_api_key: str = ""  # loaded from GEMINI_API_KEY env var (Secret Manager in prod)
     research_timeout_seconds: int = 60  # max time to wait for research agent response
 
+    # V4-GCS: Google Cloud Storage settings
+    gcs_bucket_name: str = "terafac-datasets"
+    gcs_signed_url_ttl_seconds: int = 900  # 15 minutes max
+    gcs_sa_key_path: str = "gcs-service-account.json"  # SA key for signing URLs (bucket-level only)
+
     # CORS
     cors_origins: str = "http://localhost:3100,http://localhost:3000"
 

@@ -89,7 +89,9 @@ async def run_training(job_id: str) -> None:
     # Safety check: only run if job is actually in training stage
     doc = get_doc(COLLECTION, job_id)
     if doc and doc.get("status") != "training":
-        logger.warning("Job %s: training aborted (status=%s, not 'training')", job_id, doc.get("status"))
+        logger.warning(
+            "Job %s: training aborted (status=%s, not 'training')", job_id, doc.get("status")
+        )
         return
 
     logger.info("Job %s: training started (%d epochs)", job_id, TOTAL_EPOCHS)
