@@ -386,7 +386,13 @@ async def test_get_results_after_done(client: AsyncClient) -> None:
         risk_tier="medium",
         risk_reasoning="Stub: medium risk assumed.",
     )
-    with patch("src.services.data_service.get_doc", return_value=done_doc):
+    with (
+        patch("src.services.data_service.get_doc", return_value=done_doc),
+        patch(
+            "src.services.data_service.mint_signed_get_url",
+            return_value="https://storage.googleapis.com/signed-sample",
+        ),
+    ):
         resp = await client.get("/jobs/job_int_001/results", headers=AUTH)
 
     assert resp.status_code == 200
@@ -400,13 +406,20 @@ async def test_get_results_after_done(client: AsyncClient) -> None:
 
 
 async def test_get_inference_after_done(client: AsyncClient) -> None:
-    with patch("src.services.data_service.get_doc", return_value=_doc(status="done")):
+    with (
+        patch("src.services.data_service.get_doc", return_value=_doc(status="done")),
+        patch(
+            "src.services.data_service.mint_signed_get_url",
+            return_value="https://storage.googleapis.com/terafac-datasets/results/job_int_001/best.pt?X-Goog-Signature=FAKE",
+        ),
+    ):
         resp = await client.get("/jobs/job_int_001/inference", headers=AUTH)
 
     assert resp.status_code == 200
     body = resp.json()
     assert "torch" in body["code"]
-    assert "checkpoint" in body["checkpoint_signed_url"]
+    assert "storage.googleapis.com" in body["checkpoint_signed_url"]
+    assert "best.pt" in body["checkpoint_signed_url"]
 
 
 # ── 19. Reject alternative path ───────────────────────────────────────────────

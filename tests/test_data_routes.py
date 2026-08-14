@@ -481,7 +481,13 @@ def test_service_get_results_returns_data_when_done() -> None:
         "risk_tier": "low",
         "risk_reasoning": "low risk",
     }
-    with patch("src.services.data_service.get_doc", return_value=doc):
+    with (
+        patch("src.services.data_service.get_doc", return_value=doc),
+        patch(
+            "src.services.data_service.mint_signed_get_url",
+            return_value="https://storage.googleapis.com/signed-mock",
+        ),
+    ):
         result = get_results("job_001")
 
     assert result.final_metrics.acc == 0.91
@@ -504,8 +510,15 @@ def test_service_get_inference_raises_when_not_done() -> None:
 def test_service_get_inference_returns_code_when_done() -> None:
     from src.services.data_service import get_inference
 
-    with patch("src.services.data_service.get_doc", return_value={"status": "done"}):
+    with (
+        patch("src.services.data_service.get_doc", return_value={"status": "done"}),
+        patch(
+            "src.services.data_service.mint_signed_get_url",
+            return_value="https://storage.googleapis.com/signed-checkpoint",
+        ),
+    ):
         result = get_inference("job_001")
 
     assert "torch" in result.code
     assert result.checkpoint_signed_url != ""
+    assert "storage.googleapis.com" in result.checkpoint_signed_url

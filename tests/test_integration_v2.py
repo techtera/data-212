@@ -334,7 +334,13 @@ async def test_e2e_poll_done(client: AsyncClient, auth_headers: dict):
 
 @pytest.mark.asyncio
 async def test_e2e_results(client: AsyncClient, auth_headers: dict):
-    with patch("src.services.data_service.get_doc", return_value=_job(status="done")):
+    with (
+        patch("src.services.data_service.get_doc", return_value=_job(status="done")),
+        patch(
+            "src.services.data_service.mint_signed_get_url",
+            return_value="https://storage.googleapis.com/signed-sample",
+        ),
+    ):
         resp = await client.get(f"/jobs/{_JOB_ID}/results", headers=auth_headers)
     assert resp.status_code == 200
     body = resp.json()
@@ -348,12 +354,19 @@ async def test_e2e_results(client: AsyncClient, auth_headers: dict):
 
 @pytest.mark.asyncio
 async def test_e2e_inference(client: AsyncClient, auth_headers: dict):
-    with patch("src.services.data_service.get_doc", return_value=_job(status="done")):
+    with (
+        patch("src.services.data_service.get_doc", return_value=_job(status="done")),
+        patch(
+            "src.services.data_service.mint_signed_get_url",
+            return_value="https://storage.googleapis.com/terafac-datasets/results/best.pt?signed=1",
+        ),
+    ):
         resp = await client.get(f"/jobs/{_JOB_ID}/inference", headers=auth_headers)
     assert resp.status_code == 200
     body = resp.json()
     assert "code" in body
     assert "checkpoint_signed_url" in body
+    assert "storage.googleapis.com" in body["checkpoint_signed_url"]
 
 
 # ── 13. Logout ────────────────────────────────────────────────────────────────

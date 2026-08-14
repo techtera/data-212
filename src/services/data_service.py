@@ -17,6 +17,7 @@ from src.schemas.fe_contract import (
     ResultsResponse,
     SamplePrediction,
 )
+from src.services.gcs_service import GCSServiceError, mint_signed_get_url
 
 logger = logging.getLogger(__name__)
 
@@ -178,6 +179,9 @@ def get_logs(job_id: str) -> LogsResponse:
 def get_results(job_id: str) -> ResultsResponse:
     """Return final training results (only meaningful after stage=done).
 
+    V4-GCS-M3: Sample prediction images are served via time-boxed GCS signed
+    GET URLs when available. Falls back to mock images if GCS is not configured.
+
     Raises ValueError when the job is not yet done.
     """
     data = _require_job(job_id)
@@ -195,16 +199,48 @@ def get_results(job_id: str) -> ResultsResponse:
         total_minutes=float(raw_fm.get("total_minutes", 12)),
     )
 
+    # V4-GCS: Try to serve sample predictions from GCS; fall back to mock images
+    sample_preds = _get_sample_predictions_from_gcs(job_id)
+
     return ResultsResponse(
         final_metrics=fm,
-        sample_predictions=_CANNED_SAMPLE_PREDS,
+        sample_predictions=sample_preds,
         risk_tier=data.get("risk_tier") or "medium",
         risk_reasoning=data.get("risk_reasoning") or "Stub: medium risk assumed (V1).",
     )
 
 
+def _get_sample_predictions_from_gcs(job_id: str) -> list[SamplePrediction]:
+    """Attempt to serve sample prediction images from GCS.
+
+    Returns signed URLs for images in results/{job_id}/samples/ if available,
+    otherwise falls back to canned mock images.
+    """
+    try:
+        predictions = []
+        for i in range(1, 4):  # 3 sample predictions
+            image_url = mint_signed_get_url(f"results/{job_id}/samples/input_{i}.png")
+            pred_url = mint_signed_get_url(f"results/{job_id}/samples/pred_{i}.png")
+            gt_url = mint_signed_get_url(f"results/{job_id}/samples/gt_{i}.png")
+            predictions.append(
+                SamplePrediction(
+                    image_url=image_url,
+                    pred_mask_url=pred_url,
+                    gt_mask_url=gt_url,
+                )
+            )
+        return predictions
+    except GCSServiceError:
+        # Fall back to mock images when GCS is not available
+        logger.info("Job %s: GCS sample predictions unavailable, using mock images", job_id)
+        return list(_CANNED_SAMPLE_PREDS)
+
+
 def get_inference(job_id: str) -> InferenceResponse:
-    """Return the inference script + a stub checkpoint URL (V1).
+    """Return the inference script + a time-boxed GCS signed GET URL for the checkpoint.
+
+    The checkpoint URL is minted fresh on each request (V4-GCS-M3) — it is never
+    baked into the UI as a long-lived link. The URL expires in ≤15 minutes.
 
     Raises ValueError when the job is not yet done.
     """
@@ -213,7 +249,16 @@ def get_inference(job_id: str) -> InferenceResponse:
     if stage != "done":
         raise ValueError(f"job {job_id} inference not available in stage '{stage}'")
 
+    # V4-GCS: Mint a fresh signed GET URL for the checkpoint on each request
+    checkpoint_path = f"results/{job_id}/best.pt"
+    try:
+        checkpoint_url = mint_signed_get_url(checkpoint_path)
+    except GCSServiceError:
+        # Fallback to mock URL if GCS is not configured/available
+        logger.warning("Job %s: GCS signed URL failed, falling back to mock checkpoint", job_id)
+        checkpoint_url = "/mock-data/checkpoint-mock.pt"
+
     return InferenceResponse(
         code=_INFERENCE_CODE,
-        checkpoint_signed_url="/mock-data/checkpoint-mock.pt",
+        checkpoint_signed_url=checkpoint_url,
     )
