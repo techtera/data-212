@@ -74,7 +74,7 @@ async def run_pre_masking(job_id: str) -> None:
     logger.info("Job %s: -> awaiting_annotation", job_id)
 
 
-async def run_training(job_id: str) -> None:
+async def run_training(job_id: str, gcs_urls: dict | None = None) -> None:  # type: ignore[type-arg]
     """Simulate a 5-epoch training run.
 
     For each epoch:
@@ -83,8 +83,25 @@ async def run_training(job_id: str) -> None:
 
     After all epochs completes, advances the job to done and writes final
     metrics + canned sample predictions.
+
+    Args:
+        job_id: The Firestore job document ID.
+        gcs_urls: Optional dict with signed GCS URLs (V4-GCS-M2). Keys:
+            - dataset_signed_url: GET URL for the uploaded dataset zip
+            - weights_signed_url: GET URL for base model weights
+            - results_upload_url: PUT URL for uploading best.pt
+            - results_metrics_url: PUT URL for uploading metrics.json
+          In V4-VERTEX, the training agent will use these URLs to fetch data
+          and upload results. In this stub, they are logged but not used.
     """
     from src.db.crud import get_doc
+
+    # Log GCS URLs metadata (NEVER log the actual URL strings — they are secrets)
+    if gcs_urls:
+        url_keys = list(gcs_urls.keys())
+        logger.info("Job %s: received GCS signed URLs: %s", job_id, url_keys)
+    else:
+        logger.info("Job %s: no GCS URLs provided (stub mode)", job_id)
 
     # Safety check: only run if job is actually in training stage
     doc = get_doc(COLLECTION, job_id)

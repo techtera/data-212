@@ -124,7 +124,7 @@ async def test_worker_calls_training_stub():
         await _drain(broker)
         await broker.stop_worker()
 
-    mock_train.assert_awaited_once_with("job_tr")
+    mock_train.assert_awaited_once_with("job_tr", gcs_urls={})
     mock_pre.assert_not_awaited()
 
 
@@ -205,7 +205,7 @@ async def test_worker_processes_multiple_tasks_sequentially():
     async def fake_pre(job_id: str) -> None:
         call_order.append(f"pre:{job_id}")
 
-    async def fake_train(job_id: str) -> None:
+    async def fake_train(job_id: str, gcs_urls=None) -> None:
         call_order.append(f"train:{job_id}")
 
     with (

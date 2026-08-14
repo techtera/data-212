@@ -127,6 +127,14 @@ def get_job_progress(job_id: str) -> JobProgress | None:
     )
 
 
+def get_job_dataset_path(job_id: str) -> str | None:
+    """Return the dataset_object_path stored on the job document, or None."""
+    data = get_doc(COLLECTION, job_id)
+    if data is None:
+        return None
+    return data.get("dataset_object_path")
+
+
 def list_jobs() -> list[JobSummary]:
     """Return all jobs as FE-facing JobSummary list."""
     docs = query_docs(COLLECTION, limit=200)

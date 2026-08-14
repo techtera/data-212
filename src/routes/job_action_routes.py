@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import logging
+
 from fastapi import APIRouter, Depends, HTTPException, status
 
 from src.middleware.auth import require_auth
@@ -12,7 +14,10 @@ from src.schemas.fe_contract import (
 )
 from src.services import job_service
 from src.services.broker import BrokerTask, get_broker
+from src.services.gcs_service import GCSServiceError, mint_signed_get_url, mint_signed_put_url
 from src.services.jwt_hop import issue_hop_token
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(tags=["job-actions"], dependencies=[Depends(require_auth)])
 
@@ -72,7 +77,9 @@ async def approve_job(job_id: str) -> ApproveResponse:
     """Approve a job awaiting human review → advance to training.
 
     Mints a training-scoped hop token and dispatches the training task
-    via the broker.
+    via the broker. Also mints time-boxed GCS signed URLs for the training
+    agent to fetch data and upload results (V4-GCS-M2).
+
     Guard: job must be in awaiting_approval — returns 409 otherwise.
     """
     try:
@@ -82,9 +89,32 @@ async def approve_job(job_id: str) -> ApproveResponse:
     except ValueError as exc:
         raise _wrong_stage(str(exc)) from exc
 
+    # Mint GCS signed URLs for the training agent
+    training_payload: dict = {}  # type: ignore[type-arg]
+    try:
+        dataset_path = job_service.get_job_dataset_path(job_id)
+        if dataset_path:
+            training_payload["dataset_signed_url"] = mint_signed_get_url(dataset_path)
+            training_payload["weights_signed_url"] = mint_signed_get_url("weights/base.pt")
+            training_payload["results_upload_url"] = mint_signed_put_url(
+                f"results/{job_id}/best.pt",
+                content_type="application/octet-stream",
+            )
+            training_payload["results_metrics_url"] = mint_signed_put_url(
+                f"results/{job_id}/metrics.json",
+                content_type="application/json",
+            )
+            logger.info("Job %s: minted training GCS signed URLs", job_id)
+    except GCSServiceError as exc:
+        # Log but don't block training — stubs don't use URLs yet.
+        # In V4-VERTEX this will become a hard failure.
+        logger.warning("Job %s: GCS URL minting failed (non-fatal for stubs): %s", job_id, exc)
+
     token = issue_hop_token(job_id, step="training")
     broker = get_broker()
-    await broker.enqueue(BrokerTask(job_id=job_id, task_type="training", hop_token=token))
+    await broker.enqueue(
+        BrokerTask(job_id=job_id, task_type="training", hop_token=token, payload=training_payload)
+    )
     return result
 
 

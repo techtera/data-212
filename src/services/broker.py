@@ -112,7 +112,7 @@ class InMemoryBroker(BaseBroker):
                 elif task.task_type == "research":
                     await run_research(task.job_id, task.hop_token)
                 elif task.task_type == "training":
-                    await stubs.run_training(task.job_id)
+                    await stubs.run_training(task.job_id, gcs_urls=task.payload)
                 else:
                     logger.warning("Broker: unknown task_type=%s — skipped", task.task_type)
 
