@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import logging
+
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 
 from src.middleware.auth import require_auth
@@ -12,7 +14,10 @@ from src.schemas.fe_contract import (
 )
 from src.services import job_service
 from src.services.broker import BrokerTask, get_broker
+from src.services.gcs_service import GCSServiceError, object_exists
 from src.services.jwt_hop import issue_hop_token
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(tags=["jobs"], dependencies=[Depends(require_auth)])
 
@@ -29,6 +34,7 @@ async def create_job(
 ) -> CreateJobResponse:
     """Create a new training job and dispatch the pre-masking task via broker.
 
+    Validates that the dataset object exists in GCS before creating the job.
     Quota is checked before the job is created (check_job_quota dependency).
     owner_id is read from request.state (set by require_auth) and stored on
     the job document so quota and ownership queries work correctly.
@@ -36,6 +42,21 @@ async def create_job(
     on the broker.  The HTTP response (201) is returned instantly — the
     client polls GET /jobs/{id} to follow stage progression.
     """
+    # V4-GCS: Validate dataset exists in GCS before creating the job
+    try:
+        if not object_exists(req.dataset_object_path):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Dataset not found in GCS: {req.dataset_object_path}. "
+                "Upload the file before creating a job.",
+            )
+    except GCSServiceError as exc:
+        logger.warning("GCS validation failed for %s: %s", req.dataset_object_path, exc)
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail="Unable to verify dataset in GCS. Try again later.",
+        ) from exc
+
     owner_id: str = getattr(request.state, "user_id", "")
     result = job_service.create_job(req, owner_id=owner_id)
 

@@ -66,6 +66,7 @@ async def test_create_job_enqueues_pre_masking_broker_task(
             return_value=AsyncMock(enqueue=mock_enqueue),
         ),
         patch("src.middleware.quota.query_docs", return_value=[]),
+        patch("src.routes.job_routes.object_exists", return_value=True),
     ):
         resp = await client.post(
             "/jobs",
@@ -96,6 +97,7 @@ async def test_create_job_hop_token_is_valid_pre_masking_jwt(
             return_value=AsyncMock(enqueue=mock_enqueue),
         ),
         patch("src.middleware.quota.query_docs", return_value=[]),
+        patch("src.routes.job_routes.object_exists", return_value=True),
     ):
         await client.post(
             "/jobs",

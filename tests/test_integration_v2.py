@@ -144,6 +144,7 @@ async def test_e2e_create_job_stores_owner_id(client: AsyncClient, auth_headers:
             return_value=AsyncMock(enqueue=AsyncMock()),
         ),
         patch("src.middleware.quota.query_docs", return_value=[]),
+        patch("src.routes.job_routes.object_exists", return_value=True),
     ):
         resp = await client.post(
             "/jobs",
@@ -192,6 +193,7 @@ async def test_e2e_create_job_owner_id_not_empty_for_real_session(
             return_value=AsyncMock(enqueue=AsyncMock()),
         ),
         patch("src.middleware.quota.query_docs", return_value=[]),
+        patch("src.routes.job_routes.object_exists", return_value=True),
     ):
         resp = await client.post(
             "/jobs",

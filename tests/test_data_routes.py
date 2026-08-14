@@ -23,7 +23,11 @@ _NOW = datetime.now(tz=UTC).isoformat()
 # ── POST /uploads/sign ────────────────────────────────────────────────────────
 
 
-async def test_sign_upload_returns_200(client: AsyncClient, auth_headers: dict) -> None:
+@patch(
+    "src.routes.upload_routes.mint_signed_put_url",
+    return_value="https://storage.googleapis.com/terafac-datasets/datasets/ds_test/raw.zip?X-Goog-Signature=FAKE",
+)
+async def test_sign_upload_returns_200(mock_mint, client: AsyncClient, auth_headers: dict) -> None:
     resp = await client.post("/uploads/sign", headers=auth_headers)
     assert resp.status_code == 200
     body = resp.json()
@@ -31,6 +35,8 @@ async def test_sign_upload_returns_200(client: AsyncClient, auth_headers: dict) 
     assert "object_path" in body
     assert body["object_path"].startswith("datasets/")
     assert body["object_path"].endswith("/raw.zip")
+    assert "storage.googleapis.com" in body["signed_put_url"]
+    mock_mint.assert_called_once()
 
 
 async def test_sign_upload_no_auth_returns_401(client: AsyncClient) -> None:
@@ -38,7 +44,13 @@ async def test_sign_upload_no_auth_returns_401(client: AsyncClient) -> None:
     assert resp.status_code == 401
 
 
-async def test_sign_upload_different_ids_each_call(client: AsyncClient, auth_headers: dict) -> None:
+@patch(
+    "src.routes.upload_routes.mint_signed_put_url",
+    return_value="https://storage.googleapis.com/signed",
+)
+async def test_sign_upload_different_ids_each_call(
+    mock_mint, client: AsyncClient, auth_headers: dict
+) -> None:
     """Each call must generate a unique object_path."""
     r1 = await client.post("/uploads/sign", headers=auth_headers)
     r2 = await client.post("/uploads/sign", headers=auth_headers)

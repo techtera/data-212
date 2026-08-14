@@ -151,6 +151,7 @@ async def test_create_job_allowed_under_quota(client: AsyncClient, auth_headers:
 
     with (
         patch("src.middleware.quota.query_docs", return_value=[{}] * 5),
+        patch("src.routes.job_routes.object_exists", return_value=True),
         patch("src.services.job_service.create_job") as mock_create,
     ):
         mock_create.return_value = CreateJobResponse(job_id="job_quota_test", stage="pre_masking")

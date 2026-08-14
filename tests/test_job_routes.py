@@ -13,7 +13,10 @@ async def test_create_job_returns_201(client: AsyncClient, auth_headers: dict) -
     """POST /jobs with valid payload must return 201 + job_id + stage."""
     mock_response = CreateJobResponse(job_id="job_001", stage="pre_masking")
 
-    with patch("src.routes.job_routes.job_service.create_job", return_value=mock_response):
+    with (
+        patch("src.routes.job_routes.job_service.create_job", return_value=mock_response),
+        patch("src.routes.job_routes.object_exists", return_value=True),
+    ):
         resp = await client.post(
             "/jobs",
             json={"prompt": "train on my dataset", "dataset_object_path": "datasets/x/raw.zip"},

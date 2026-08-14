@@ -167,6 +167,7 @@ async def test_create_job_route_spawns_pre_masking(
             return_value=AsyncMock(enqueue=mock_enqueue),
         ),
         patch("src.middleware.quota.query_docs", return_value=[]),
+        patch("src.routes.job_routes.object_exists", return_value=True),
     ):
         resp = await client.post(
             "/jobs",
@@ -204,6 +205,7 @@ async def test_create_job_route_returns_201_before_task_finishes(
             return_value=AsyncMock(enqueue=slow_enqueue),
         ),
         patch("src.middleware.quota.query_docs", return_value=[]),
+        patch("src.routes.job_routes.object_exists", return_value=True),
     ):
         resp = await client.post(
             "/jobs",

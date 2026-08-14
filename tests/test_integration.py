@@ -107,13 +107,16 @@ async def test_logout_204(client: AsyncClient) -> None:
     assert resp.status_code == 204
 
 
-# ── 3. Upload sign + dev acceptor ─────────────────────────────────────────────
+# ── 3. Upload sign (V4-GCS: real GCS signed URL) ──────────────────────────────
 
 
-async def test_sign_upload_and_dev_put(client: AsyncClient) -> None:
-    """Full two-hop upload dance: sign → PUT to the returned URL."""
-    # Step 1: get signed URL
-    resp = await client.post("/uploads/sign", headers=HEADERS)
+async def test_sign_upload_returns_gcs_url(client: AsyncClient) -> None:
+    """POST /uploads/sign returns a GCS signed PUT URL + object_path."""
+    with patch(
+        "src.routes.upload_routes.mint_signed_put_url",
+        return_value="https://storage.googleapis.com/terafac-datasets/datasets/ds_test/raw.zip?X-Goog-Signature=FAKE",
+    ):
+        resp = await client.post("/uploads/sign", headers=HEADERS)
     assert resp.status_code == 200
     body = resp.json()
     signed_url: str = body["signed_put_url"]
@@ -121,15 +124,7 @@ async def test_sign_upload_and_dev_put(client: AsyncClient) -> None:
 
     assert object_path.startswith("datasets/")
     assert object_path.endswith("/raw.zip")
-    assert "dev/upload" in signed_url
-
-    # Step 2: PUT bytes to the dev acceptor (strip scheme+host — test client is base-relative)
-    from urllib.parse import urlparse
-
-    path = urlparse(signed_url).path
-    put_resp = await client.put(path, headers=AUTH, content=b"fake-zip-bytes")
-    assert put_resp.status_code == 200
-    assert put_resp.json()["ok"] == "accepted"
+    assert "storage.googleapis.com" in signed_url
 
 
 # ── 4. Create job ─────────────────────────────────────────────────────────────
@@ -143,6 +138,7 @@ async def test_create_job_returns_pre_masking(client: AsyncClient) -> None:
             "src.routes.job_routes.get_broker",
             return_value=AsyncMock(enqueue=AsyncMock()),
         ),
+        patch("src.routes.job_routes.object_exists", return_value=True),
     ):
         resp = await client.post(
             "/jobs",
