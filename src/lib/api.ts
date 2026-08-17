@@ -1,140 +1,150 @@
-import type {
-  AnnotationsResponse,
-  ApproveResponse,
-  CreateJobRequest,
-  CreateJobResponse,
-  DataPreviewImage,
-  FlaggedImage,
-  JobProgress,
-  JobSummary,
-  RejectResponse,
-  RerunResponse,
-  UploadSignResponse,
-} from "@/types/job";
-import type {
-  ComputeSample,
-  InferenceResponse,
-  LogsResponse,
-  ResultsResponse,
-} from "@/types/metrics";
+const BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 
-const MOCK_BASE = "/api";
-const PROD_BASE =
-  process.env.NEXT_PUBLIC_API_BASE?.replace(/\/$/, "") || "http://localhost:8000";
-
-export const API_BASE =
-  process.env.NEXT_PUBLIC_USE_MOCK === "true" ? MOCK_BASE : PROD_BASE;
-
-/** Whether we are running in MSW mock mode */
-const IS_MOCK = process.env.NEXT_PUBLIC_USE_MOCK === "true";
-
-function authHeaders(): Record<string, string> {
-  // V1 dev auth: inject Bearer token when USE_MOCK=false and DEV_TOKEN is set.
-  if (!IS_MOCK && process.env.NEXT_PUBLIC_DEV_TOKEN) {
-    return { Authorization: `Bearer ${process.env.NEXT_PUBLIC_DEV_TOKEN}` };
+async function request<T>(
+  path: string,
+  options: RequestInit = {},
+  token?: string
+): Promise<T> {
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+    ...(options.headers as Record<string, string>),
+  };
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`;
   }
-  return {};
-}
 
-async function jsonFetch<T>(path: string, init?: RequestInit): Promise<T> {
-  const res = await fetch(`${API_BASE}${path}`, {
-    headers: {
-      "Content-Type": "application/json",
-      ...authHeaders(),
-    },
-    ...init,
+  const res = await fetch(`${BASE_URL}${path}`, {
+    ...options,
+    headers,
   });
+
   if (!res.ok) {
-    const text = await res.text().catch(() => "");
-    throw new Error(`API ${res.status} ${path}: ${text}`);
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.detail || body.message || `Request failed: ${res.status}`);
   }
+
   if (res.status === 204) return undefined as T;
-  return (await res.json()) as T;
+  return res.json();
 }
 
-export const api = {
-  /**
-   * Two-hop upload: sign → PUT to GCS.
-   *
-   * Security flow (per BLOCKDIAGRAM.txt):
-   * 1. POST /uploads/sign (authenticated) → backend mints a time-boxed GCS
-   *    signed PUT URL scoped to a single object (datasets/{id}/raw.zip).
-   * 2. PUT the raw zip bytes directly to the signed URL. NO auth header is
-   *    sent to GCS — the signature in the URL IS the credential.
-   * 3. Returns { signed_put_url, object_path } so the caller can pass
-   *    object_path to POST /jobs.
-   *
-   * The frontend NEVER constructs GCS URLs itself — only uses what the
-   * backend returns. The session token never reaches GCS.
-   */
-  uploadDataset: async (file: File): Promise<UploadSignResponse> => {
-    // Step 1: Get signed PUT URL from authenticated backend
-    const signResult = await jsonFetch<UploadSignResponse>("/uploads/sign", {
-      method: "POST",
-    });
+// Auth
+export function register(data: { username: string; email: string; password: string }) {
+  return request<{ id: string; username: string; email: string }>('/auth/register', {
+    method: 'POST',
+    body: JSON.stringify(data),
+  });
+}
 
-    // Step 2: PUT the raw file directly to GCS (or mock endpoint)
-    // CRITICAL: No Authorization header — the signed URL IS the auth.
-    // Content-Type must match what the backend specified when signing.
-    const putRes = await fetch(signResult.signed_put_url, {
-      method: "PUT",
-      headers: {
-        "Content-Type": "application/zip",
-      },
-      body: file,
-    });
+export function login(data: { username: string; password: string }) {
+  return request<{ token: string; user: { id: string; username: string; email: string } }>(
+    '/auth/login',
+    { method: 'POST', body: JSON.stringify(data) }
+  );
+}
 
-    if (!putRes.ok) {
-      const text = await putRes.text().catch(() => "");
-      throw new Error(`GCS upload failed ${putRes.status}: ${text}`);
-    }
+export function logout(token: string) {
+  return request<void>('/auth/logout', { method: 'POST' }, token);
+}
 
-    return signResult;
-  },
+export function getMe(token: string) {
+  return request<{ id: string; username: string; email: string }>('/auth/me', {}, token);
+}
 
-  // Legacy methods kept for MSW mock compatibility
-  signUpload: () =>
-    jsonFetch<UploadSignResponse>("/uploads/sign", { method: "POST" }),
+// Jobs
+export interface Job {
+  id: string;
+  name: string | null;
+  job_type: 'eval' | 'finetune';
+  status: 'uploading' | 'running' | 'done' | 'error';
+  model_id: string;
+  created_at: string;
+  mean_iou?: number;
+  dice_score?: number;
+  pixel_accuracy?: number;
+  error_message?: string;
+}
 
-  createJob: (req: CreateJobRequest) =>
-    jsonFetch<CreateJobResponse>("/jobs", {
-      method: "POST",
-      body: JSON.stringify(req),
-    }),
+export function getJobs(token: string) {
+  return request<Job[]>('/jobs', {}, token);
+}
 
-  listJobs: () => jsonFetch<JobSummary[]>("/jobs"),
+export function createEvalJob(
+  token: string,
+  data: { model_id: string; dataset_id: string; name?: string }
+) {
+  return request<{ id: string; status: string }>('/jobs/eval', {
+    method: 'POST',
+    body: JSON.stringify(data),
+  }, token);
+}
 
-  getJob: (id: string) => jsonFetch<JobProgress>(`/jobs/${id}`),
+export function createFinetuneJob(
+  token: string,
+  data: { model_id: string; dataset_id: string; name?: string }
+) {
+  return request<{ id: string; status: string }>('/jobs/finetune', {
+    method: 'POST',
+    body: JSON.stringify(data),
+  }, token);
+}
 
-  getFlagged: (id: string) =>
-    jsonFetch<FlaggedImage[]>(`/jobs/${id}/flagged`),
+// Uploads
+export function signUpload(token: string) {
+  return request<{ dataset_id: string; images_upload_url: string; masks_upload_url: string }>(
+    '/uploads/sign',
+    { method: 'POST' },
+    token
+  );
+}
 
-  getDataPreview: (id: string) =>
-    jsonFetch<DataPreviewImage[]>(`/jobs/${id}/data-preview`),
+export async function uploadToSignedUrl(
+  url: string,
+  file: File,
+  onProgress?: (pct: number) => void
+): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open('PUT', url, true);
+    xhr.setRequestHeader('Content-Type', 'application/zip');
 
-  sendAnnotations: (id: string, _zipBlob: Blob) =>
-    jsonFetch<AnnotationsResponse>(`/jobs/${id}/annotations`, {
-      method: "POST",
-      body: JSON.stringify({ ack: true }),
-    }),
+    xhr.upload.onprogress = (e) => {
+      if (e.lengthComputable && onProgress) {
+        onProgress(Math.round((e.loaded / e.total) * 100));
+      }
+    };
 
-  approve: (id: string) =>
-    jsonFetch<ApproveResponse>(`/jobs/${id}/approve`, { method: "POST" }),
+    xhr.onload = () => {
+      if (xhr.status >= 200 && xhr.status < 300) resolve();
+      else reject(new Error(`Upload failed: ${xhr.status}`));
+    };
 
-  reject: (id: string) =>
-    jsonFetch<RejectResponse>(`/jobs/${id}/reject`, { method: "POST" }),
+    xhr.onerror = () => reject(new Error('Upload failed'));
+    xhr.send(file);
+  });
+}
 
-  rerun: (id: string) =>
-    jsonFetch<RerunResponse>(`/jobs/${id}/rerun`, { method: "POST" }),
+// Job actions
+export function runEval(token: string, jobId: string) {
+  return request<{ status: string }>(`/jobs/${jobId}/run-eval`, { method: 'POST' }, token);
+}
 
-  getCompute: (id: string) =>
-    jsonFetch<ComputeSample>(`/jobs/${id}/compute`),
+export function runFinetune(token: string, jobId: string) {
+  return request<{ status: string }>(`/jobs/${jobId}/run-finetune`, { method: 'POST' }, token);
+}
 
-  getLogs: (id: string) => jsonFetch<LogsResponse>(`/jobs/${id}/logs`),
+// Results
+export function getResults(token: string, jobId: string) {
+  return request<{ mean_iou: number; dice_score: number; pixel_accuracy: number; prediction_urls: string[] }>(
+    `/jobs/${jobId}/results`,
+    {},
+    token
+  );
+}
 
-  getResults: (id: string) =>
-    jsonFetch<ResultsResponse>(`/jobs/${id}/results`),
-
-  getInference: (id: string) =>
-    jsonFetch<InferenceResponse>(`/jobs/${id}/inference`),
-};
+export function getDownload(token: string, jobId: string) {
+  return request<{ checkpoint_url: string | null; inference_script_url: string | null }>(
+    `/jobs/${jobId}/download`,
+    {},
+    token
+  );
+}
