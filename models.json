@@ -1,0 +1,31 @@
+[
+  {
+    "model_name": "YOLO11L-MASKING-MODEL",
+    "load_path": "gs://yolo_masking_model/results/weights/best.pt",
+    "inference_script": "gs://terafac-datasets/inference/code/yolo_masking_inference.py",
+    "save_path": "",
+    "user_id": ""
+  },
+  {
+    "model_name": "UNETPLUSPLUS-MODEL",
+    "load_path": "gs://edge_model_data/edge_Data_optimised_v1/best_model_v7.pth",
+    "inference_script": "gs://terafac-datasets/inference/code/unet_inference.py",
+    "save_path": "",
+    "user_id": ""
+  },
+  {
+    "model_name": "VGGT-SEGFORMER",
+    "load_path": "gs://dikshit-vggt/vggt/checkpoints/best_model.pth",
+    "inference_script": "gs://terafac-datasets/inference/code/vggt_segformer_inference.py",
+    "save_path": "",
+    "user_id": ""
+  },
+  {
+    "model_name": "VGGT-UNETPP",
+    "load_path": "gs://dikshit-vggt/vggt-edge-mask-checkpoints/best_model.pt",
+    "inference_script": "gs://terafac-datasets/inference/code/vggt_unetpp_inference.py",
+    "save_path": "",
+    "user_id": ""
+  }
+] 
+   
