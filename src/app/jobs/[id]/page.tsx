@@ -10,9 +10,6 @@ import { toast } from 'sonner';
 import { ArrowLeft, Download, Loader2, CheckCircle2, XCircle, Clock, Image as ImageIcon } from 'lucide-react';
 import Link from 'next/link';
 
-const MODEL_NAMES: Record<string, string> = {
-  yolo_masking: 'YOLO11L Masking Model',
-};
 
 const PIPELINE_STEPS = [
   'Uploading images to cloud storage',
@@ -27,7 +24,7 @@ function JobDetailContent() {
   const { id } = useParams<{ id: string }>();
   const { token } = useAuth();
   const [job, setJob] = useState<Job | null>(null);
-  const [results, setResults] = useState<{ mean_iou: number; dice_score: number; pixel_accuracy: number; prediction_urls?: string[] } | null>(null);
+  const [results, setResults] = useState<{ prediction_urls?: string[] } | null>(null);
   const [loading, setLoading] = useState(true);
   const [pollCount, setPollCount] = useState(0);
 
@@ -43,13 +40,7 @@ function JobDetailContent() {
             const r = await getResults(token, id);
             setResults(r);
           } catch {
-            if (found.mean_iou != null) {
-              setResults({
-                mean_iou: found.mean_iou,
-                dice_score: found.dice_score!,
-                pixel_accuracy: found.pixel_accuracy!,
-              });
-            }
+            // ignore
           }
         }
       }
@@ -129,7 +120,7 @@ function JobDetailContent() {
                   {job.name || `${job.job_type === 'eval' ? 'Inference' : 'Fine-tuning'} Job`}
                 </h1>
                 <p className="text-sm text-muted mt-1">
-                  {job.job_type === 'eval' ? 'Inference' : 'Fine-tuning'} &middot; {MODEL_NAMES[job.model_id] || job.model_id}
+                  {job.job_type === 'eval' ? 'Inference' : 'Fine-tuning'} &middot; {job.model_name}
                 </p>
                 <p className="text-sm text-muted">
                   Created: {new Date(job.created_at).toLocaleString()}

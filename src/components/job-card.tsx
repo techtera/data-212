@@ -11,10 +11,6 @@ const STATUS_STYLES: Record<string, string> = {
   error: 'bg-destructive/20 text-destructive',
 };
 
-const MODEL_NAMES: Record<string, string> = {
-  yolo_masking: 'YOLO11L Masking Model',
-};
-
 export function JobCard({ job }: { job: Job }) {
   const statusClass = STATUS_STYLES[job.status] || 'bg-muted/20 text-muted';
   const isEval = job.job_type === 'eval';
@@ -37,7 +33,7 @@ export function JobCard({ job }: { job: Job }) {
         <p className="text-sm font-medium text-foreground/80 mb-1">{job.name}</p>
       )}
       <div className="text-sm text-muted space-y-1">
-        <p>Model: {MODEL_NAMES[job.model_id] || job.model_id}</p>
+        <p>Model: {job.model_name}</p>
         <p>Created: {new Date(job.created_at).toLocaleString()}</p>
       </div>
     </Link>

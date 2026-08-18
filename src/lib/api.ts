@@ -50,17 +50,27 @@ export function getMe(token: string) {
   return request<{ id: string; username: string; email: string }>('/auth/me', {}, token);
 }
 
+// Models
+export interface Model {
+  model_name: string;
+  load_path: string;
+  inference_script: string;
+  save_path: string;
+  user_id: string;
+}
+
+export function getModels(token: string) {
+  return request<Model[]>('/models', {}, token);
+}
+
 // Jobs
 export interface Job {
   id: string;
   name: string | null;
   job_type: 'eval' | 'finetune';
   status: 'uploading' | 'running' | 'done' | 'error';
-  model_id: string;
+  model_name: string;
   created_at: string;
-  mean_iou?: number;
-  dice_score?: number;
-  pixel_accuracy?: number;
   error_message?: string;
 }
 
@@ -70,7 +80,7 @@ export function getJobs(token: string) {
 
 export function createEvalJob(
   token: string,
-  data: { model_id: string; dataset_id: string; name?: string }
+  data: { model_name: string; name: string }
 ) {
   return request<{ id: string; status: string }>('/jobs/eval', {
     method: 'POST',
@@ -80,7 +90,7 @@ export function createEvalJob(
 
 export function createFinetuneJob(
   token: string,
-  data: { model_id: string; dataset_id: string; name?: string }
+  data: { model_name: string; name: string }
 ) {
   return request<{ id: string; status: string }>('/jobs/finetune', {
     method: 'POST',
@@ -89,10 +99,10 @@ export function createFinetuneJob(
 }
 
 // Uploads
-export function signUpload(token: string) {
-  return request<{ dataset_id: string; images_upload_url: string; masks_upload_url: string }>(
+export function signUpload(token: string, jobName: string) {
+  return request<{ job_name: string; images_upload_url: string; masks_upload_url: string }>(
     '/uploads/sign',
-    { method: 'POST' },
+    { method: 'POST', body: JSON.stringify({ job_name: jobName }) },
     token
   );
 }
@@ -134,7 +144,7 @@ export function runFinetune(token: string, jobId: string) {
 
 // Results
 export function getResults(token: string, jobId: string) {
-  return request<{ mean_iou: number; dice_score: number; pixel_accuracy: number; prediction_urls: string[] }>(
+  return request<{ prediction_urls: string[] }>(
     `/jobs/${jobId}/results`,
     {},
     token

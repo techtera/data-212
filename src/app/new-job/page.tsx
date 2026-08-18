@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/auth-context';
 import { Protected } from '@/components/protected';
@@ -12,19 +12,18 @@ import {
   createFinetuneJob,
   runEval,
   runFinetune,
+  getModels,
+  type Model,
 } from '@/lib/api';
 import { toast } from 'sonner';
 import { Upload, FlaskConical, Wrench } from 'lucide-react';
-
-const MODELS = [
-  { id: 'yolo_masking', name: 'YOLO11L Masking Model' },
-];
 
 function NewJobContent() {
   const { token } = useAuth();
   const router = useRouter();
   const [jobName, setJobName] = useState('');
-  const [modelId, setModelId] = useState('yolo_masking');
+  const [models, setModels] = useState<Model[]>([]);
+  const [selectedModel, setSelectedModel] = useState('');
   const [imagesFile, setImagesFile] = useState<File | null>(null);
   const [masksFile, setMasksFile] = useState<File | null>(null);
   const [progress, setProgress] = useState(0);
@@ -33,7 +32,19 @@ function NewJobContent() {
   const imagesRef = useRef<HTMLInputElement>(null);
   const masksRef = useRef<HTMLInputElement>(null);
 
+  useEffect(() => {
+    if (!token) return;
+    getModels(token).then((m) => {
+      setModels(m);
+      if (m.length > 0) setSelectedModel(m[0].model_name);
+    }).catch(() => {});
+  }, [token]);
+
   const handleSubmit = async (jobType: 'eval' | 'finetune') => {
+    if (!jobName.trim()) {
+      toast.error('Please enter a job name');
+      return;
+    }
     if (!imagesFile) {
       toast.error('Please select images.zip');
       return;
@@ -42,15 +53,15 @@ function NewJobContent() {
       toast.error('Masks are required for fine-tuning');
       return;
     }
-    if (!token) return;
+    if (!token || !selectedModel) return;
 
     setSubmitting(true);
     setProgress(0);
 
     try {
-      // Step 1: Get signed URLs
+      // Step 1: Get signed URLs (using job name for path)
       setStep('Preparing upload...');
-      const { dataset_id, images_upload_url, masks_upload_url } = await signUpload(token);
+      const { images_upload_url, masks_upload_url } = await signUpload(token, jobName.trim());
 
       // Step 2: Upload images
       setStep('Uploading images to cloud storage...');
@@ -66,7 +77,7 @@ function NewJobContent() {
       // Step 4: Create job
       setStep('Creating inference job...');
       setProgress(92);
-      const jobData = { model_id: modelId, dataset_id, ...(jobName.trim() && { name: jobName.trim() }) };
+      const jobData = { model_name: selectedModel, name: jobName.trim() };
 
       const job = jobType === 'eval'
         ? await createEvalJob(token, jobData)
@@ -107,23 +118,24 @@ function NewJobContent() {
               value={jobName}
               onChange={(e) => setJobName(e.target.value)}
               disabled={submitting}
-              placeholder="e.g. Batch 5 - Factory Floor Images"
+              placeholder="e.g. Batch5-Factory-Floor"
               className="w-full px-3 py-2 rounded-md bg-card border border-border focus:outline-none focus:border-primary text-foreground"
             />
+            <p className="text-xs text-muted mt-1">Used as folder name in cloud storage</p>
           </div>
 
           {/* Model Selection */}
           <div>
-            <label className="block text-sm font-medium mb-1">Pretrained Model</label>
+            <label className="block text-sm font-medium mb-1">Model</label>
             <select
-              value={modelId}
-              onChange={(e) => setModelId(e.target.value)}
+              value={selectedModel}
+              onChange={(e) => setSelectedModel(e.target.value)}
               disabled={submitting}
               className="w-full px-3 py-2 rounded-md bg-card border border-border focus:outline-none focus:border-primary text-foreground cursor-pointer"
             >
-              {MODELS.map((m) => (
-                <option key={m.id} value={m.id}>
-                  {m.name}
+              {models.map((m) => (
+                <option key={m.model_name} value={m.model_name}>
+                  {m.model_name}
                 </option>
               ))}
             </select>
@@ -191,14 +203,14 @@ function NewJobContent() {
           <div className="flex gap-3 pt-2">
             <button
               onClick={() => handleSubmit('eval')}
-              disabled={submitting}
+              disabled={submitting || !jobName.trim()}
               className="flex-1 flex items-center justify-center gap-2 py-2.5 px-4 rounded-md bg-primary text-primary-foreground font-medium hover:opacity-90 transition-opacity disabled:opacity-50 cursor-pointer disabled:cursor-not-allowed"
             >
               <FlaskConical size={16} />
               Run Inference
             </button>
             <button
-              disabled={!masksFile || submitting}
+              disabled={!masksFile || submitting || !jobName.trim()}
               onClick={() => handleSubmit('finetune')}
               title={!masksFile ? 'Upload masks to enable fine-tuning' : 'Fine-tuning coming soon'}
               className="flex-1 flex items-center justify-center gap-2 py-2.5 px-4 rounded-md bg-warning/20 text-warning border border-warning/30 font-medium disabled:opacity-50 cursor-pointer disabled:cursor-not-allowed"
