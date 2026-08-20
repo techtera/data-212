@@ -1,2 +1,35 @@
+# Project files not needed for deployment
+CLAUDE.md
 DailyWork.xlsx
 opencode.json
+terafac_neon_plan.md
+.claude/
+
+# Local dev folders
+docs/
+model/
+vmcode/
+
+# Secrets
+.env
+*.env.local
+backend/.env
+backend/gcs-service-account.json
+backend/firebase-service-account.json
+backend/keys/
+frontend/.env.local
+
+# Build / runtime
+backend/venv/
+backend/__pycache__/
+frontend/node_modules/
+frontend/.next/
+frontend/out/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/

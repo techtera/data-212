@@ -1,0 +1,33 @@
+# ── Python ────────────────────────────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+
+# ── Virtual environment ───────────────────────────────────────────────────────
+venv/
+.venv/
+
+# ── Secrets — NEVER commit these ─────────────────────────────────────────────
+.env
+.env.local
+firebase-service-account.json
+gcs-service-account.json
+*.json.key
+keys/
+
+# ── Tool caches ───────────────────────────────────────────────────────────────
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+
+# ── Build artefacts ───────────────────────────────────────────────────────────
+dist/
+build/
+*.egg-info/
+tmp_agent*.log
+
+# ── Test/dev files ────────────────────────────────────────────────────────────
+test_e2e.py
+yolo_masking_inference_check.py
+upload_inference_script.py
