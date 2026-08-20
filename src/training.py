@@ -535,9 +535,9 @@ async def _poll_vm_finetune(job_id: str, job_dir: str, bucket: str, job_name: st
                     model_info = get_model_by_name(model_name)
                     inference_script_blob = ""
                     if model_info:
-                        script_gs = model_info.get("inference_script", "")
-                        if script_gs:
-                            inference_script_blob = script_gs.replace(f"gs://{bucket}/", "")
+                        usr_script = model_info.get("usr_inference_script", "")
+                        if usr_script:
+                            inference_script_blob = usr_script.replace(f"gs://{bucket}/", "")
 
                     artifacts = {
                         "checkpoint": f"finetune/{job_name}/{model_name}/best.pt",

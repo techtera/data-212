@@ -5,6 +5,7 @@
     "load_path": "gs://yolo_masking_model/results/weights/best.pt",
     "inference_script": "gs://terafac-datasets/inference/code/yolo_masking_inference.py",
     "finetune_script": "gs://terafac-datasets/finetune/code/yolo_finetune.py",
+    "usr_inference_script": "gs://terafac-datasets/usr-inference-code/yolo_inference.py",
     "save_path": "",
     "user_id": ""
   },
@@ -14,6 +15,7 @@
     "load_path": "gs://dikshit-vggt/vggt/checkpoints/best_model.pth",
     "inference_script": "gs://terafac-datasets/inference/code/vggt_segformer_inference.py",
     "finetune_script": "gs://terafac-datasets/finetune/code/vggt_segformer_finetune.py",
+    "usr_inference_script": "gs://terafac-datasets/usr-inference-code/vggt_segformer_inference.py",
     "save_path": "",
     "user_id": ""
   },
@@ -23,6 +25,7 @@
     "load_path": "gs://edge_model_data/edge_Data_optimised_v1/best_model_v7.pth",
     "inference_script": "gs://terafac-datasets/inference/code/unet_inference.py",
     "finetune_script": "gs://terafac-datasets/finetune/code/unetpp_finetune.py",
+    "usr_inference_script": "gs://terafac-datasets/usr-inference-code/unetpp_inference.py",
     "save_path": "",
     "user_id": ""
   },
@@ -32,6 +35,7 @@
     "load_path": "gs://dikshit-vggt/vggt-edge-mask-checkpoints/best_model.pt",
     "inference_script": "gs://terafac-datasets/inference/code/vggt_unetpp_inference.py",
     "finetune_script": "gs://terafac-datasets/finetune/code/vggt_unetpp_finetune.py",
+    "usr_inference_script": "gs://terafac-datasets/usr-inference-code/vggt_unetpp_inference.py",
     "save_path": "",
     "user_id": ""
   }
