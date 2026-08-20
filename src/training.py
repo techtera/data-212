@@ -95,6 +95,7 @@ async def _stub_finetune(job_id: str, model_name: str, job_name: str) -> None:
 def _get_ssh_client():
     """Create a paramiko SSH client connected to the training VM."""
     import io
+    import os
     import paramiko
 
     client = paramiko.SSHClient()
@@ -103,8 +104,14 @@ def _get_ssh_client():
     key_value = settings.VM_SSH_KEY_PATH
     if "PRIVATE KEY" in key_value:
         pkey = paramiko.Ed25519Key.from_private_key(io.StringIO(key_value))
-    else:
+    elif key_value.startswith("b3Blbn") or key_value.startswith("AAAA"):
+        pem = "-----BEGIN OPENSSH PRIVATE KEY-----\n" + key_value.strip() + "\n-----END OPENSSH PRIVATE KEY-----\n"
+        pkey = paramiko.Ed25519Key.from_private_key(io.StringIO(pem))
+    elif os.path.isfile(key_value):
         pkey = paramiko.Ed25519Key.from_private_key_file(key_value)
+    else:
+        pem = "-----BEGIN OPENSSH PRIVATE KEY-----\n" + key_value.strip() + "\n-----END OPENSSH PRIVATE KEY-----\n"
+        pkey = paramiko.Ed25519Key.from_private_key(io.StringIO(pem))
     client.connect(
         hostname=settings.VM_HOST,
         username=settings.VM_USER,
