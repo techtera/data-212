@@ -53,8 +53,10 @@ export function getMe(token: string) {
 // Models
 export interface Model {
   model_name: string;
+  category: 'object_mask' | 'edge_mask';
   load_path: string;
   inference_script: string;
+  finetune_script: string;
   save_path: string;
   user_id: string;
 }
@@ -143,8 +145,30 @@ export function runFinetune(token: string, jobId: string) {
 }
 
 // Results
+export interface JobResults {
+  id: string;
+  status: string;
+  job_type: string;
+  prediction_urls: string[];
+  mean_iou: number;
+  dice_score: number;
+  pixel_accuracy: number;
+  artifacts: {
+    checkpoint?: string;
+    inference_script?: string;
+    metrics?: string;
+    epochs_trained?: number;
+    best_epoch?: number;
+    learning_rate?: number;
+    train_samples?: number;
+    val_samples?: number;
+    epoch_history?: Array<Record<string, number>>;
+    [key: string]: unknown;
+  } | null;
+}
+
 export function getResults(token: string, jobId: string) {
-  return request<{ prediction_urls: string[] }>(
+  return request<JobResults>(
     `/jobs/${jobId}/results`,
     {},
     token

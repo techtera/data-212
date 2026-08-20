@@ -23,6 +23,7 @@ function NewJobContent() {
   const router = useRouter();
   const [jobName, setJobName] = useState('');
   const [models, setModels] = useState<Model[]>([]);
+  const [category, setCategory] = useState<'object_mask' | 'edge_mask'>('object_mask');
   const [selectedModel, setSelectedModel] = useState('');
   const [imagesFile, setImagesFile] = useState<File | null>(null);
   const [masksFile, setMasksFile] = useState<File | null>(null);
@@ -36,9 +37,20 @@ function NewJobContent() {
     if (!token) return;
     getModels(token).then((m) => {
       setModels(m);
-      if (m.length > 0) setSelectedModel(m[0].model_name);
+      const first = m.find(x => x.category === 'object_mask');
+      if (first) setSelectedModel(first.model_name);
     }).catch(() => {});
   }, [token]);
+
+  const filteredModels = models.filter(m => m.category === category);
+
+  useEffect(() => {
+    const filtered = models.filter(m => m.category === category);
+    const first = filtered[0];
+    if (first && !filtered.find(m => m.model_name === selectedModel)) {
+      setSelectedModel(first.model_name);
+    }
+  }, [category, models, selectedModel]);
 
   const handleSubmit = async (jobType: 'eval' | 'finetune') => {
     if (!jobName.trim()) {
@@ -75,7 +87,7 @@ function NewJobContent() {
       }
 
       // Step 4: Create job
-      setStep('Creating inference job...');
+      setStep(jobType === 'eval' ? 'Creating inference job...' : 'Creating fine-tune job...');
       setProgress(92);
       const jobData = { model_name: selectedModel, name: jobName.trim() };
 
@@ -84,7 +96,7 @@ function NewJobContent() {
         : await createFinetuneJob(token, jobData);
 
       // Step 5: Start job on VM
-      setStep('Starting inference on GPU server...');
+      setStep(jobType === 'eval' ? 'Starting inference on GPU server...' : 'Starting fine-tuning on GPU server...');
       setProgress(96);
       if (jobType === 'eval') {
         await runEval(token, job.id);
@@ -93,7 +105,7 @@ function NewJobContent() {
       }
 
       setProgress(100);
-      toast.success('Inference started on GPU server');
+      toast.success(jobType === 'eval' ? 'Inference started on GPU server' : 'Fine-tuning started on GPU server');
       router.push(`/jobs/${job.id}`);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Failed to create job');
@@ -124,6 +136,37 @@ function NewJobContent() {
             <p className="text-xs text-muted mt-1">Used as folder name in cloud storage</p>
           </div>
 
+          {/* Model Category */}
+          <div>
+            <label className="block text-sm font-medium mb-1">Model Type</label>
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={() => setCategory('object_mask')}
+                disabled={submitting}
+                className={`flex-1 py-2 px-3 rounded-md text-sm font-medium border transition-colors cursor-pointer ${
+                  category === 'object_mask'
+                    ? 'bg-primary text-primary-foreground border-primary'
+                    : 'bg-card border-border text-muted hover:border-primary/50'
+                }`}
+              >
+                Object Mask
+              </button>
+              <button
+                type="button"
+                onClick={() => setCategory('edge_mask')}
+                disabled={submitting}
+                className={`flex-1 py-2 px-3 rounded-md text-sm font-medium border transition-colors cursor-pointer ${
+                  category === 'edge_mask'
+                    ? 'bg-primary text-primary-foreground border-primary'
+                    : 'bg-card border-border text-muted hover:border-primary/50'
+                }`}
+              >
+                Edge Mask
+              </button>
+            </div>
+          </div>
+
           {/* Model Selection */}
           <div>
             <label className="block text-sm font-medium mb-1">Model</label>
@@ -133,7 +176,7 @@ function NewJobContent() {
               disabled={submitting}
               className="w-full px-3 py-2 rounded-md bg-card border border-border focus:outline-none focus:border-primary text-foreground cursor-pointer"
             >
-              {models.map((m) => (
+              {filteredModels.map((m) => (
                 <option key={m.model_name} value={m.model_name}>
                   {m.model_name}
                 </option>
