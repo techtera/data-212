@@ -1,6 +1,9 @@
 """Google Cloud Storage service for signed URL generation."""
 
 import datetime
+import json
+import os
+import tempfile
 
 from google.cloud import storage
 from google.oauth2 import service_account
@@ -15,9 +18,12 @@ def _get_bucket() -> storage.Bucket:
     """Lazily initialize GCS client and return the bucket."""
     global _client, _bucket
     if _bucket is None:
-        credentials = service_account.Credentials.from_service_account_file(
-            settings.GCS_SA_KEY_PATH
-        )
+        key_path = settings.GCS_SA_KEY_PATH
+        if key_path.strip().startswith("{"):
+            info = json.loads(key_path)
+            credentials = service_account.Credentials.from_service_account_info(info)
+        else:
+            credentials = service_account.Credentials.from_service_account_file(key_path)
         _client = storage.Client(credentials=credentials, project=credentials.project_id)
         _bucket = _client.bucket(settings.GCS_BUCKET_NAME)
     return _bucket

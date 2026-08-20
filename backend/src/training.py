@@ -94,13 +94,17 @@ async def _stub_finetune(job_id: str, model_name: str, job_name: str) -> None:
 
 def _get_ssh_client():
     """Create a paramiko SSH client connected to the training VM."""
+    import io
     import paramiko
 
     client = paramiko.SSHClient()
     client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
 
-    key_path = settings.VM_SSH_KEY_PATH
-    pkey = paramiko.Ed25519Key.from_private_key_file(key_path)
+    key_value = settings.VM_SSH_KEY_PATH
+    if "PRIVATE KEY" in key_value:
+        pkey = paramiko.Ed25519Key.from_private_key(io.StringIO(key_value))
+    else:
+        pkey = paramiko.Ed25519Key.from_private_key_file(key_value)
     client.connect(
         hostname=settings.VM_HOST,
         username=settings.VM_USER,
