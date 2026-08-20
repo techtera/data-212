@@ -39,7 +39,12 @@ class JobResponse(BaseModel):
 class ResultsResponse(BaseModel):
     id: str
     status: str
+    job_type: str = "eval"
     prediction_urls: list[str] = []
+    mean_iou: float = 0
+    dice_score: float = 0
+    pixel_accuracy: float = 0
+    artifacts: dict | None = None
 
 
 class DownloadResponse(BaseModel):
@@ -217,10 +222,19 @@ async def get_results(job_id: str, user_id: UUID = Depends(require_auth)):
             url = mint_signed_get_url(pred_path)
             prediction_urls.append(url)
 
+    artifacts = None
+    if job["artifacts"]:
+        artifacts = job["artifacts"] if isinstance(job["artifacts"], dict) else json.loads(job["artifacts"] or "{}")
+
     return ResultsResponse(
         id=str(job["id"]),
         status=job["status"],
+        job_type=job["job_type"],
         prediction_urls=prediction_urls,
+        mean_iou=job["mean_iou"] or 0,
+        dice_score=job["dice_score"] or 0,
+        pixel_accuracy=job["pixel_accuracy"] or 0,
+        artifacts=artifacts,
     )
 
 

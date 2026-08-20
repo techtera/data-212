@@ -16,8 +16,10 @@ MODELS_FILE = Path(__file__).resolve().parent.parent / "models.json"
 
 class ModelEntry(BaseModel):
     model_name: str
+    category: str
     load_path: str
     inference_script: str
+    finetune_script: str
     save_path: str
     user_id: str
 
