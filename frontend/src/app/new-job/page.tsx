@@ -255,9 +255,9 @@ function NewJobContent() {
               type="button"
               onClick={() => setShowAdvanced(!showAdvanced)}
               disabled={submitting}
-              className="text-xs text-muted hover:text-foreground transition-colors cursor-pointer"
+              className="text-sm text-primary/70 hover:text-primary transition-colors cursor-pointer underline underline-offset-2"
             >
-              {showAdvanced ? '▼' : '▶'} Advanced Settings
+              {showAdvanced ? '▾ Hide' : '▸ Advanced Settings'}
             </button>
             {showAdvanced && (
               <div className="mt-2 grid grid-cols-2 gap-3">
