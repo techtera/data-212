@@ -259,7 +259,15 @@ function NewJobContent() {
             >
               {showAdvanced ? '▾ Hide' : '▸ Advanced Settings'}
             </button>
-            {showAdvanced && (
+            {showAdvanced && (() => {
+              const defaults: Record<string, { epochs: number; lr: string }> = {
+                'YOLO11L-MASKING-MODEL': { epochs: 60, lr: '0.0001' },
+                'VGGT-SEGFORMER': { epochs: 2, lr: '0.0001' },
+                'UNETPLUSPLUS-MODEL': { epochs: 40, lr: '0.00001' },
+                'VGGT-UNETPP': { epochs: 2, lr: '0.0003' },
+              };
+              const d = defaults[selectedModel] || { epochs: 10, lr: '0.0001' };
+              return (
               <div className="mt-2 grid grid-cols-2 gap-3">
                 <div>
                   <label className="block text-xs text-muted mb-1">Epochs</label>
@@ -268,8 +276,8 @@ function NewJobContent() {
                     value={epochs}
                     onChange={(e) => setEpochs(e.target.value)}
                     disabled={submitting}
-                    placeholder="default"
-                    className="w-full px-3 py-1.5 text-sm rounded-md bg-card border border-border focus:outline-none focus:border-primary text-foreground"
+                    placeholder={String(d.epochs)}
+                    className="w-full px-3 py-1.5 text-sm rounded-md bg-card border border-border focus:outline-none focus:border-primary text-foreground placeholder:text-foreground/50"
                   />
                 </div>
                 <div>
@@ -279,12 +287,13 @@ function NewJobContent() {
                     value={lr}
                     onChange={(e) => setLr(e.target.value)}
                     disabled={submitting}
-                    placeholder="default"
-                    className="w-full px-3 py-1.5 text-sm rounded-md bg-card border border-border focus:outline-none focus:border-primary text-foreground"
+                    placeholder={d.lr}
+                    className="w-full px-3 py-1.5 text-sm rounded-md bg-card border border-border focus:outline-none focus:border-primary text-foreground placeholder:text-foreground/50"
                   />
                 </div>
               </div>
-            )}
+              );
+            })()}
           </div>
 
           {/* Submit Buttons */}
