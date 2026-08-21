@@ -30,6 +30,9 @@ function NewJobContent() {
   const [progress, setProgress] = useState(0);
   const [step, setStep] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const [showAdvanced, setShowAdvanced] = useState(false);
+  const [epochs, setEpochs] = useState('');
+  const [lr, setLr] = useState('');
   const imagesRef = useRef<HTMLInputElement>(null);
   const masksRef = useRef<HTMLInputElement>(null);
 
@@ -93,7 +96,11 @@ function NewJobContent() {
 
       const job = jobType === 'eval'
         ? await createEvalJob(token, jobData)
-        : await createFinetuneJob(token, jobData);
+        : await createFinetuneJob(token, {
+            ...jobData,
+            ...(epochs ? { epochs: parseInt(epochs) } : {}),
+            ...(lr ? { lr: parseFloat(lr) } : {}),
+          });
 
       // Step 5: Start job on VM
       setStep(jobType === 'eval' ? 'Starting inference on GPU server...' : 'Starting fine-tuning on GPU server...');
@@ -241,6 +248,44 @@ function NewJobContent() {
               </div>
             </div>
           )}
+
+          {/* Advanced Settings (hidden by default) */}
+          <div>
+            <button
+              type="button"
+              onClick={() => setShowAdvanced(!showAdvanced)}
+              disabled={submitting}
+              className="text-xs text-muted hover:text-foreground transition-colors cursor-pointer"
+            >
+              {showAdvanced ? '▼' : '▶'} Advanced Settings
+            </button>
+            {showAdvanced && (
+              <div className="mt-2 grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs text-muted mb-1">Epochs</label>
+                  <input
+                    type="number"
+                    value={epochs}
+                    onChange={(e) => setEpochs(e.target.value)}
+                    disabled={submitting}
+                    placeholder="default"
+                    className="w-full px-3 py-1.5 text-sm rounded-md bg-card border border-border focus:outline-none focus:border-primary text-foreground"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs text-muted mb-1">Learning Rate</label>
+                  <input
+                    type="text"
+                    value={lr}
+                    onChange={(e) => setLr(e.target.value)}
+                    disabled={submitting}
+                    placeholder="default"
+                    className="w-full px-3 py-1.5 text-sm rounded-md bg-card border border-border focus:outline-none focus:border-primary text-foreground"
+                  />
+                </div>
+              </div>
+            )}
+          </div>
 
           {/* Submit Buttons */}
           <div className="flex gap-3 pt-2">
