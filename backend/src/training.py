@@ -211,7 +211,7 @@ print('Images downloaded')
 # 4. Extract images (filter out mask/ground-truth files)
 cd "$JOB_DIR"
 unzip -o -q images.zip -d images_raw
-mv images_raw/images/* images/ 2>/dev/null || mv images_raw/* images/ 2>/dev/null
+find images_raw -type f \( -name "*.png" -o -name "*.jpg" -o -name "*.jpeg" -o -name "*.bmp" -o -name "*.tiff" \) -exec mv {} images/ \;
 rm -rf images_raw images.zip
 find "$JOB_DIR/images" -type f \( -name "*_mask*" -o -name "*mask_*" -o -name "*_gt*" \) -delete
 
@@ -433,11 +433,11 @@ print('Images and masks downloaded')
 # 4. Extract images and masks
 cd "$JOB_DIR"
 unzip -o -q images.zip -d images_raw
-mv images_raw/images/* images/ 2>/dev/null || mv images_raw/* images/ 2>/dev/null
+find images_raw -type f \( -name "*.png" -o -name "*.jpg" -o -name "*.jpeg" -o -name "*.bmp" -o -name "*.tiff" \) -exec mv {} images/ \;
 rm -rf images_raw images.zip
 
 unzip -o -q masks.zip -d masks_raw
-mv masks_raw/masks/* masks/ 2>/dev/null || mv masks_raw/* masks/ 2>/dev/null
+find masks_raw -type f \( -name "*.png" -o -name "*.jpg" -o -name "*.txt" -o -name "*.jpeg" \) -exec mv {} masks/ \;
 rm -rf masks_raw masks.zip
 
 # 5. Run finetune
