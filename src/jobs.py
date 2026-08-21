@@ -23,6 +23,8 @@ router = APIRouter(prefix="/jobs", tags=["jobs"])
 class CreateJobRequest(BaseModel):
     model_name: str = Field(min_length=1, max_length=128)
     name: str = Field(min_length=1, max_length=128)
+    epochs: int | None = None
+    lr: float | None = None
 
 
 class JobResponse(BaseModel):
@@ -137,9 +139,15 @@ async def create_finetune_job(body: CreateJobRequest, user_id: UUID = Depends(re
     gcs_images = f"upload/{user_id}/{job_name}/images.zip"
     gcs_masks = f"upload/{user_id}/{job_name}/masks.zip"
 
+    training_config = {}
+    if body.epochs:
+        training_config["epochs"] = body.epochs
+    if body.lr:
+        training_config["lr"] = body.lr
+
     row = await fetch_one(
-        """INSERT INTO jobs (owner_id, name, job_type, status, model_id, dataset_id, gcs_images_zip, gcs_masks_zip)
-           VALUES ($1, $2, 'finetune', 'uploading', $3, $4, $5, $6)
+        """INSERT INTO jobs (owner_id, name, job_type, status, model_id, dataset_id, gcs_images_zip, gcs_masks_zip, artifacts)
+           VALUES ($1, $2, 'finetune', 'uploading', $3, $4, $5, $6, $7::jsonb)
            RETURNING *""",
         user_id,
         job_name,
@@ -147,6 +155,7 @@ async def create_finetune_job(body: CreateJobRequest, user_id: UUID = Depends(re
         job_name,
         gcs_images,
         gcs_masks,
+        json.dumps(training_config) if training_config else None,
     )
 
     return _job_response(row)
