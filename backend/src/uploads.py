@@ -23,11 +23,11 @@ class SignResponse(BaseModel):
 @router.post("/sign", response_model=SignResponse)
 async def sign_upload_urls(body: SignRequest, user_id: UUID = Depends(require_auth)):
     """Generate signed PUT URLs for images.zip and masks.zip.
-    Paths: upload/{job_name}/images.zip and upload/{job_name}/masks.zip"""
+    Paths: upload/{user_id}/{job_name}/images.zip and upload/{user_id}/{job_name}/masks.zip"""
     job_name = body.job_name
 
-    images_path = f"upload/{job_name}/images.zip"
-    masks_path = f"upload/{job_name}/masks.zip"
+    images_path = f"upload/{user_id}/{job_name}/images.zip"
+    masks_path = f"upload/{user_id}/{job_name}/masks.zip"
 
     images_url = mint_signed_put_url(images_path, content_type="application/zip")
     masks_url = mint_signed_put_url(masks_path, content_type="application/zip")

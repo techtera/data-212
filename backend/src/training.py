@@ -15,13 +15,13 @@ VM_WORKDIR = "/home/terafacdata_gmail_com/Shubhojit"
 VM_VENV = f"{VM_WORKDIR}/venv/bin/python"
 
 
-async def run_eval(job_id: str, model_name: str, job_name: str) -> None:
+async def run_eval(job_id: str, model_name: str, job_name: str, owner_id: str = "") -> None:
     """Run model evaluation. Dispatches to stub or SSH based on TRAINING_MODE."""
     try:
         if settings.TRAINING_MODE == "stub":
             await _stub_eval(job_id, model_name, job_name)
         else:
-            await _ssh_eval(job_id, model_name, job_name)
+            await _ssh_eval(job_id, model_name, job_name, owner_id)
     except Exception as e:
         logger.exception("Eval job %s failed", job_id)
         await execute(
@@ -31,13 +31,13 @@ async def run_eval(job_id: str, model_name: str, job_name: str) -> None:
         )
 
 
-async def run_finetune(job_id: str, model_name: str, job_name: str) -> None:
+async def run_finetune(job_id: str, model_name: str, job_name: str, owner_id: str = "") -> None:
     """Run model fine-tuning. Dispatches to stub or SSH based on TRAINING_MODE."""
     try:
         if settings.TRAINING_MODE == "stub":
             await _stub_finetune(job_id, model_name, job_name)
         else:
-            await _ssh_finetune(job_id, model_name, job_name)
+            await _ssh_finetune(job_id, model_name, job_name, owner_id)
     except Exception as e:
         logger.exception("Finetune job %s failed", job_id)
         await execute(
@@ -80,8 +80,8 @@ async def _stub_finetune(job_id: str, model_name: str, job_name: str) -> None:
                updated_at = NOW()
            WHERE id = $2""",
         json.dumps({
-            "checkpoint": f"finetune/{job_name}/{model_name}/best.pt",
-            "inference_script": f"finetune/{job_name}/{model_name}/run_inference.py",
+            "checkpoint": f"finetune/stub/{job_name}/{model_name}/best.pt",
+            "inference_script": f"finetune/stub/{job_name}/{model_name}/run_inference.py",
         }),
         job_id,
     )
@@ -134,7 +134,7 @@ def _ssh_exec(client, command: str) -> str:
     return out
 
 
-async def _ssh_eval(job_id: str, model_name: str, job_name: str) -> None:
+async def _ssh_eval(job_id: str, model_name: str, job_name: str, owner_id: str = "") -> None:
     """Run evaluation on the GCP VM via SSH inside a screen session."""
     model_info = get_model_by_name(model_name)
     if not model_info:
@@ -154,7 +154,7 @@ async def _ssh_eval(job_id: str, model_name: str, job_name: str) -> None:
     script_blob = script_parts[1]
     script_filename = script_blob.split("/")[-1]
 
-    images_gcs_path = f"upload/{job_name}/images.zip"
+    images_gcs_path = f"upload/{owner_id}/{job_name}/images.zip"
     data_bucket = settings.GCS_BUCKET_NAME
 
     client = _get_ssh_client()
@@ -233,7 +233,7 @@ b = c.bucket('{data_bucket}')
 pred_dir = '$JOB_DIR/output/predictions'
 files = os.listdir(pred_dir) if os.path.isdir(pred_dir) else []
 for f in files:
-    b.blob(f'inference/{job_name}/predictions/{{f}}').upload_from_filename(f'{{pred_dir}}/{{f}}')
+    b.blob(f'inference/{owner_id}/{job_name}/predictions/{{f}}').upload_from_filename(f'{{pred_dir}}/{{f}}')
 print(f'Uploaded {{len(files)}} predictions to GCS')
 "
 
@@ -243,7 +243,7 @@ $VENV -c "
 from google.cloud import storage
 c = storage.Client()
 b = c.bucket('{data_bucket}')
-b.blob('inference/{job_name}/metrics.json').upload_from_filename('$JOB_DIR/output/metrics.json')
+b.blob('inference/{owner_id}/{job_name}/metrics.json').upload_from_filename('$JOB_DIR/output/metrics.json')
 print('Metrics uploaded to GCS')
 "
 cp "$JOB_DIR/output/metrics.json" "$JOB_DIR/results.json"
@@ -266,10 +266,10 @@ echo "=== Job {job_id} finished at $(date) ==="
     finally:
         client.close()
 
-    await _poll_vm_job(job_id, job_dir, data_bucket, job_name)
+    await _poll_vm_job(job_id, job_dir, data_bucket, job_name, owner_id)
 
 
-async def _poll_vm_job(job_id: str, job_dir: str, bucket: str, job_name: str) -> None:
+async def _poll_vm_job(job_id: str, job_dir: str, bucket: str, job_name: str, owner_id: str = "") -> None:
     """Poll the VM for job completion by checking the status file."""
     poll_interval = 10
     max_polls = 360  # 60 minutes max
@@ -304,7 +304,7 @@ async def _poll_vm_job(job_id: str, job_dir: str, bucket: str, job_name: str) ->
                     preds_from_json = results.get("predictions", [])
                     if preds_from_json:
                         gcs_predictions = [
-                            f"inference/{job_name}/predictions/{p.split('/')[-1]}"
+                            f"inference/{owner_id}/{job_name}/predictions/{p.split('/')[-1]}"
                             for p in preds_from_json
                         ]
                     else:
@@ -312,7 +312,7 @@ async def _poll_vm_job(job_id: str, job_dir: str, bucket: str, job_name: str) ->
                         pred_list = _ssh_exec(client, f"ls {job_dir}/output/predictions/ 2>/dev/null || echo ''").strip()
                         pred_files = [f for f in pred_list.split("\n") if f.strip()]
                         gcs_predictions = [
-                            f"inference/{job_name}/predictions/{f}"
+                            f"inference/{owner_id}/{job_name}/predictions/{f}"
                             for f in pred_files
                         ]
 
@@ -348,7 +348,7 @@ async def _poll_vm_job(job_id: str, job_dir: str, bucket: str, job_name: str) ->
     )
 
 
-async def _ssh_finetune(job_id: str, model_name: str, job_name: str) -> None:
+async def _ssh_finetune(job_id: str, model_name: str, job_name: str, owner_id: str = "") -> None:
     """Run fine-tuning on the GCP VM via SSH inside a screen session."""
     model_info = get_model_by_name(model_name)
     if not model_info:
@@ -369,8 +369,8 @@ async def _ssh_finetune(job_id: str, model_name: str, job_name: str) -> None:
     script_blob = script_parts[1]
     script_filename = script_blob.split("/")[-1]
 
-    images_gcs_path = f"upload/{job_name}/images.zip"
-    masks_gcs_path = f"upload/{job_name}/masks.zip"
+    images_gcs_path = f"upload/{owner_id}/{job_name}/images.zip"
+    masks_gcs_path = f"upload/{owner_id}/{job_name}/masks.zip"
     data_bucket = settings.GCS_BUCKET_NAME
 
     client = _get_ssh_client()
@@ -450,7 +450,7 @@ $VENV -c "
 from google.cloud import storage
 c = storage.Client()
 b = c.bucket('{data_bucket}')
-b.blob('finetune/{job_name}/{model_name}/best.pt').upload_from_filename('$JOB_DIR/output/best.pt')
+b.blob('finetune/{owner_id}/{job_name}/{model_name}/best.pt').upload_from_filename('$JOB_DIR/output/best.pt')
 print('Checkpoint uploaded')
 "
 
@@ -464,7 +464,7 @@ b = c.bucket('{data_bucket}')
 pred_dir = '$JOB_DIR/output/predictions'
 files = os.listdir(pred_dir) if os.path.isdir(pred_dir) else []
 for f in files:
-    b.blob(f'finetune/{job_name}/{model_name}/predictions/{{f}}').upload_from_filename(f'{{pred_dir}}/{{f}}')
+    b.blob(f'finetune/{owner_id}/{job_name}/{model_name}/predictions/{{f}}').upload_from_filename(f'{{pred_dir}}/{{f}}')
 print(f'Uploaded {{len(files)}} val predictions to GCS')
 "
 
@@ -474,7 +474,7 @@ $VENV -c "
 from google.cloud import storage
 c = storage.Client()
 b = c.bucket('{data_bucket}')
-b.blob('finetune/{job_name}/{model_name}/metrics.json').upload_from_filename('$JOB_DIR/output/metrics.json')
+b.blob('finetune/{owner_id}/{job_name}/{model_name}/metrics.json').upload_from_filename('$JOB_DIR/output/metrics.json')
 print('Metrics uploaded to GCS')
 "
 cp "$JOB_DIR/output/metrics.json" "$JOB_DIR/results.json"
@@ -496,10 +496,10 @@ echo "=== Finetune Job {job_id} finished at $(date) ==="
     finally:
         client.close()
 
-    await _poll_vm_finetune(job_id, job_dir, data_bucket, job_name, model_name)
+    await _poll_vm_finetune(job_id, job_dir, data_bucket, job_name, model_name, owner_id)
 
 
-async def _poll_vm_finetune(job_id: str, job_dir: str, bucket: str, job_name: str, model_name: str) -> None:
+async def _poll_vm_finetune(job_id: str, job_dir: str, bucket: str, job_name: str, model_name: str, owner_id: str = "") -> None:
     """Poll the VM for finetune job completion."""
     poll_interval = 15
     max_polls = 480  # 2 hours max for training
@@ -531,7 +531,7 @@ async def _poll_vm_finetune(job_id: str, job_dir: str, bucket: str, job_name: st
 
                     preds_from_json = results.get("predictions", [])
                     gcs_predictions = [
-                        f"finetune/{job_name}/{model_name}/predictions/{p.split('/')[-1]}"
+                        f"finetune/{owner_id}/{job_name}/{model_name}/predictions/{p.split('/')[-1]}"
                         for p in preds_from_json
                     ]
 
@@ -539,7 +539,7 @@ async def _poll_vm_finetune(job_id: str, job_dir: str, bucket: str, job_name: st
                         pred_list = _ssh_exec(client, f"ls {job_dir}/output/predictions/ 2>/dev/null || echo ''").strip()
                         pred_files = [f for f in pred_list.split("\n") if f.strip()]
                         gcs_predictions = [
-                            f"finetune/{job_name}/{model_name}/predictions/{f}"
+                            f"finetune/{owner_id}/{job_name}/{model_name}/predictions/{f}"
                             for f in pred_files
                         ]
 
@@ -551,9 +551,9 @@ async def _poll_vm_finetune(job_id: str, job_dir: str, bucket: str, job_name: st
                             inference_script_blob = usr_script.replace(f"gs://{bucket}/", "")
 
                     artifacts = {
-                        "checkpoint": f"finetune/{job_name}/{model_name}/best.pt",
+                        "checkpoint": f"finetune/{owner_id}/{job_name}/{model_name}/best.pt",
                         "inference_script": inference_script_blob,
-                        "metrics": f"finetune/{job_name}/{model_name}/metrics.json",
+                        "metrics": f"finetune/{owner_id}/{job_name}/{model_name}/metrics.json",
                         "epochs_trained": results.get("epochs_trained", 0),
                         "best_epoch": results.get("best_epoch", 0),
                         "train_samples": results.get("train_samples", 0),

@@ -108,8 +108,8 @@ async def create_eval_job(body: CreateJobRequest, user_id: UUID = Depends(requir
         raise HTTPException(status_code=400, detail=f"Unknown model: {body.model_name}")
 
     job_name = body.name
-    gcs_images = f"upload/{job_name}/images.zip"
-    gcs_masks = f"upload/{job_name}/masks.zip"
+    gcs_images = f"upload/{user_id}/{job_name}/images.zip"
+    gcs_masks = f"upload/{user_id}/{job_name}/masks.zip"
 
     row = await fetch_one(
         """INSERT INTO jobs (owner_id, name, job_type, status, model_id, dataset_id, gcs_images_zip, gcs_masks_zip)
@@ -134,8 +134,8 @@ async def create_finetune_job(body: CreateJobRequest, user_id: UUID = Depends(re
         raise HTTPException(status_code=400, detail=f"Unknown model: {body.model_name}")
 
     job_name = body.name
-    gcs_images = f"upload/{job_name}/images.zip"
-    gcs_masks = f"upload/{job_name}/masks.zip"
+    gcs_images = f"upload/{user_id}/{job_name}/images.zip"
+    gcs_masks = f"upload/{user_id}/{job_name}/masks.zip"
 
     row = await fetch_one(
         """INSERT INTO jobs (owner_id, name, job_type, status, model_id, dataset_id, gcs_images_zip, gcs_masks_zip)
@@ -175,7 +175,7 @@ async def trigger_eval(
         job["id"],
     )
 
-    background_tasks.add_task(run_eval, str(job["id"]), job["model_id"], job["name"])
+    background_tasks.add_task(run_eval, str(job["id"]), job["model_id"], job["name"], str(job["owner_id"]))
 
     updated = await fetch_one("SELECT * FROM jobs WHERE id = $1", job["id"])
     return _job_response(updated)
@@ -204,7 +204,7 @@ async def trigger_finetune(
         job["id"],
     )
 
-    background_tasks.add_task(run_finetune, str(job["id"]), job["model_id"], job["name"])
+    background_tasks.add_task(run_finetune, str(job["id"]), job["model_id"], job["name"], str(job["owner_id"]))
 
     updated = await fetch_one("SELECT * FROM jobs WHERE id = $1", job["id"])
     return _job_response(updated)
