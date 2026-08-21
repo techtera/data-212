@@ -272,9 +272,7 @@ echo "=== Job {job_id} finished at $(date) ==="
 async def _poll_vm_job(job_id: str, job_dir: str, bucket: str, job_name: str, owner_id: str = "") -> None:
     """Poll the VM for job completion by checking the status file."""
     poll_interval = 10
-    max_polls = 360  # 60 minutes max
-
-    for i in range(max_polls):
+    while True:
         await asyncio.sleep(poll_interval)
 
         try:
@@ -341,11 +339,6 @@ async def _poll_vm_job(job_id: str, job_dir: str, bucket: str, job_name: str, ow
         except Exception as e:
             logger.warning("Poll %d for job %s failed: %s", i, job_id, e)
 
-    await execute(
-        "UPDATE jobs SET status = 'error', error_message = $1, updated_at = NOW() WHERE id = $2",
-        "Job timed out after 60 minutes",
-        job_id,
-    )
 
 
 async def _ssh_finetune(job_id: str, model_name: str, job_name: str, owner_id: str = "") -> None:
@@ -372,6 +365,19 @@ async def _ssh_finetune(job_id: str, model_name: str, job_name: str, owner_id: s
     images_gcs_path = f"upload/{owner_id}/{job_name}/images.zip"
     masks_gcs_path = f"upload/{owner_id}/{job_name}/masks.zip"
     data_bucket = settings.GCS_BUCKET_NAME
+
+    # Read custom training config (epochs/lr) from job artifacts
+    job_row = await fetch_one("SELECT artifacts FROM jobs WHERE id = $1", job_id)
+    training_config = {}
+    if job_row and job_row["artifacts"]:
+        tc = job_row["artifacts"] if isinstance(job_row["artifacts"], dict) else json.loads(job_row["artifacts"] or "{}")
+        training_config = tc
+
+    extra_args = ""
+    if training_config.get("epochs"):
+        extra_args += f" --epochs {training_config['epochs']}"
+    if training_config.get("lr"):
+        extra_args += f" --lr {training_config['lr']}"
 
     client = _get_ssh_client()
     job_dir = f"{VM_WORKDIR}/jobs/{job_id}"
@@ -442,7 +448,7 @@ $VENV "$JOB_DIR/{script_filename}" \\
     --masks-dir "$JOB_DIR/masks" \\
     --output-dir "$JOB_DIR/output" \\
     --job-id {job_id} \\
-    --split 0.9
+    --split 0.9{extra_args}
 
 # 6. Upload checkpoint to GCS
 echo "Uploading checkpoint..."
@@ -502,9 +508,7 @@ echo "=== Finetune Job {job_id} finished at $(date) ==="
 async def _poll_vm_finetune(job_id: str, job_dir: str, bucket: str, job_name: str, model_name: str, owner_id: str = "") -> None:
     """Poll the VM for finetune job completion."""
     poll_interval = 15
-    max_polls = 480  # 2 hours max for training
-
-    for i in range(max_polls):
+    while True:
         await asyncio.sleep(poll_interval)
 
         try:
@@ -591,8 +595,3 @@ async def _poll_vm_finetune(job_id: str, job_dir: str, bucket: str, job_name: st
         except Exception as e:
             logger.warning("Poll %d for finetune job %s failed: %s", i, job_id, e)
 
-    await execute(
-        "UPDATE jobs SET status = 'error', error_message = $1, updated_at = NOW() WHERE id = $2",
-        "Finetune job timed out after 2 hours",
-        job_id,
-    )

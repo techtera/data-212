@@ -92,7 +92,7 @@ export function createEvalJob(
 
 export function createFinetuneJob(
   token: string,
-  data: { model_name: string; name: string }
+  data: { model_name: string; name: string; epochs?: number; lr?: number }
 ) {
   return request<{ id: string; status: string }>('/jobs/finetune', {
     method: 'POST',
