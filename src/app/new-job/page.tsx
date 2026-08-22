@@ -21,6 +21,7 @@ import { Upload, FlaskConical, Wrench } from 'lucide-react';
 function NewJobContent() {
   const { token } = useAuth();
   const router = useRouter();
+  const [jobType, setJobType] = useState<'eval' | 'finetune'>('eval');
   const [jobName, setJobName] = useState('');
   const [models, setModels] = useState<Model[]>([]);
   const [category, setCategory] = useState<'object_mask' | 'edge_mask'>('object_mask');
@@ -129,6 +130,20 @@ function NewJobContent() {
         <h1 className="text-xl font-semibold mb-6">Create New Job</h1>
 
         <div className="space-y-5">
+          {/* Job Type */}
+          <div>
+            <label className="block text-sm font-medium mb-1">Task</label>
+            <select
+              value={jobType}
+              onChange={(e) => setJobType(e.target.value as 'eval' | 'finetune')}
+              disabled={submitting}
+              className="w-full px-3 py-2 rounded-md bg-card border border-border focus:outline-none focus:border-primary text-foreground cursor-pointer"
+            >
+              <option value="eval">Inference</option>
+              <option value="finetune">Fine-tuning</option>
+            </select>
+          </div>
+
           {/* Job Name */}
           <div>
             <label className="block text-sm font-medium mb-1">Job Name</label>
@@ -212,16 +227,17 @@ function NewJobContent() {
             />
           </div>
 
-          {/* Masks Upload (Optional) */}
+          {/* Masks Upload (finetune only) */}
+          {jobType === 'finetune' && (
           <div>
-            <label className="block text-sm font-medium mb-1">Masks (ZIP) <span className="text-muted text-xs font-normal">— optional for inference</span></label>
+            <label className="block text-sm font-medium mb-1">Masks (ZIP)</label>
             <div
               onClick={() => !submitting && masksRef.current?.click()}
               className={`border border-dashed border-border rounded-md p-4 text-center cursor-pointer hover:border-primary/50 transition-colors ${submitting ? 'opacity-50 pointer-events-none' : ''}`}
             >
               <Upload size={20} className="mx-auto mb-1 text-muted" />
               <p className="text-sm text-muted">
-                {masksFile ? masksFile.name : 'Click to select masks.zip (optional)'}
+                {masksFile ? masksFile.name : 'Click to select masks.zip'}
               </p>
             </div>
             <input
@@ -232,6 +248,7 @@ function NewJobContent() {
               onChange={(e) => setMasksFile(e.target.files?.[0] || null)}
             />
           </div>
+          )}
 
           {/* Progress */}
           {submitting && (
@@ -249,17 +266,25 @@ function NewJobContent() {
             </div>
           )}
 
-          {/* Advanced Settings (hidden by default) */}
-          <div>
+          {/* Advanced Settings (finetune only, hidden by default) */}
+          {jobType === 'finetune' && <div>
             <button
               type="button"
               onClick={() => setShowAdvanced(!showAdvanced)}
               disabled={submitting}
-              className="text-xs text-muted hover:text-foreground transition-colors cursor-pointer"
+              className="text-sm text-primary/70 hover:text-primary transition-colors cursor-pointer underline underline-offset-2"
             >
-              {showAdvanced ? '▼' : '▶'} Advanced Settings
+              {showAdvanced ? '▾ Hide' : '▸ Advanced Settings'}
             </button>
-            {showAdvanced && (
+            {showAdvanced && (() => {
+              const defaults: Record<string, { epochs: number; lr: string }> = {
+                'YOLO11L-MASKING-MODEL': { epochs: 60, lr: '0.0001' },
+                'VGGT-SEGFORMER': { epochs: 2, lr: '0.0001' },
+                'UNETPLUSPLUS-MODEL': { epochs: 40, lr: '0.00001' },
+                'VGGT-UNETPP': { epochs: 2, lr: '0.0003' },
+              };
+              const d = defaults[selectedModel] || { epochs: 10, lr: '0.0001' };
+              return (
               <div className="mt-2 grid grid-cols-2 gap-3">
                 <div>
                   <label className="block text-xs text-muted mb-1">Epochs</label>
@@ -268,8 +293,8 @@ function NewJobContent() {
                     value={epochs}
                     onChange={(e) => setEpochs(e.target.value)}
                     disabled={submitting}
-                    placeholder="default"
-                    className="w-full px-3 py-1.5 text-sm rounded-md bg-card border border-border focus:outline-none focus:border-primary text-foreground"
+                    placeholder={String(d.epochs)}
+                    className="w-full px-3 py-1.5 text-sm rounded-md bg-card border border-border focus:outline-none focus:border-primary text-foreground placeholder:text-foreground/50"
                   />
                 </div>
                 <div>
@@ -279,32 +304,24 @@ function NewJobContent() {
                     value={lr}
                     onChange={(e) => setLr(e.target.value)}
                     disabled={submitting}
-                    placeholder="default"
-                    className="w-full px-3 py-1.5 text-sm rounded-md bg-card border border-border focus:outline-none focus:border-primary text-foreground"
+                    placeholder={d.lr}
+                    className="w-full px-3 py-1.5 text-sm rounded-md bg-card border border-border focus:outline-none focus:border-primary text-foreground placeholder:text-foreground/50"
                   />
                 </div>
               </div>
-            )}
-          </div>
+              );
+            })()}
+          </div>}
 
-          {/* Submit Buttons */}
-          <div className="flex gap-3 pt-2">
+          {/* Submit Button */}
+          <div className="pt-2">
             <button
-              onClick={() => handleSubmit('eval')}
-              disabled={submitting || !jobName.trim()}
-              className="flex-1 flex items-center justify-center gap-2 py-2.5 px-4 rounded-md bg-primary text-primary-foreground font-medium hover:opacity-90 transition-opacity disabled:opacity-50 cursor-pointer disabled:cursor-not-allowed"
+              onClick={() => handleSubmit(jobType)}
+              disabled={submitting || !jobName.trim() || (jobType === 'finetune' && !masksFile)}
+              className="w-full flex items-center justify-center gap-2 py-2.5 px-4 rounded-md bg-primary text-primary-foreground font-medium hover:opacity-90 transition-opacity disabled:opacity-50 cursor-pointer disabled:cursor-not-allowed"
             >
-              <FlaskConical size={16} />
-              Run Inference
-            </button>
-            <button
-              disabled={!masksFile || submitting || !jobName.trim()}
-              onClick={() => handleSubmit('finetune')}
-              title={!masksFile ? 'Upload masks to enable fine-tuning' : 'Fine-tuning coming soon'}
-              className="flex-1 flex items-center justify-center gap-2 py-2.5 px-4 rounded-md bg-warning/20 text-warning border border-warning/30 font-medium disabled:opacity-50 cursor-pointer disabled:cursor-not-allowed"
-            >
-              <Wrench size={16} />
-              Fine-tune {!masksFile && '(needs masks)'}
+              {jobType === 'eval' ? <FlaskConical size={16} /> : <Wrench size={16} />}
+              {jobType === 'eval' ? 'Run Inference' : 'Start Fine-tuning'}
             </button>
           </div>
         </div>
