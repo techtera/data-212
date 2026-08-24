@@ -80,14 +80,21 @@ The model name must be exactly one of: YOLO11L-MASKING-MODEL, VGGT-SEGFORMER, UN
 
     try:
         async with httpx.AsyncClient(timeout=30) as client:
-            response = await client.post(
-                f"https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent?key={settings.GEMINI_API_KEY}",
-                json={
-                    "contents": [{"parts": [{"text": f"{system_prompt}\n\n{user_prompt}"}]}],
-                    "generationConfig": {"temperature": 0.3, "maxOutputTokens": 1024},
-                    "tools": [{"google_search": {}}],
-                },
-            )
+            response = None
+            for attempt in range(3):
+                response = await client.post(
+                    f"https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent?key={settings.GEMINI_API_KEY}",
+                    json={
+                        "contents": [{"parts": [{"text": f"{system_prompt}\n\n{user_prompt}"}]}],
+                        "generationConfig": {"temperature": 0.3, "maxOutputTokens": 1024},
+                        "tools": [{"google_search": {}}],
+                    },
+                )
+                if response.status_code == 429:
+                    import asyncio
+                    await asyncio.sleep(5)
+                    continue
+                break
 
         if response.status_code != 200:
             logger.error("Gemini API error: %d %s", response.status_code, response.text[:200])
