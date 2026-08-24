@@ -206,17 +206,21 @@ function NewJobContent() {
                 </option>
               ))}
             </select>
-            <button
-              type="button"
-              onClick={() => setShowModelInfo(!showModelInfo)}
-              className="mt-1 text-xs text-primary/70 hover:text-primary cursor-pointer underline underline-offset-2"
-            >
-              {showModelInfo ? '▾ Hide model details' : '▸ What does this model do?'}
-            </button>
+            {['YOLO11L-MASKING-MODEL', 'VGGT-SEGFORMER', 'UNETPLUSPLUS-MODEL', 'VGGT-UNETPP'].includes(selectedModel) && (
+              <button
+                type="button"
+                onClick={() => setShowModelInfo(!showModelInfo)}
+                className="mt-1 text-xs text-primary/70 hover:text-primary cursor-pointer underline underline-offset-2"
+              >
+                {showModelInfo ? '▾ Hide model details' : '▸ What does this model do?'}
+              </button>
+            )}
           </div>
 
           {/* Model Info Card */}
-          {showModelInfo && <ModelInfoCard modelName={selectedModel} token={token} />}
+          {showModelInfo && ['YOLO11L-MASKING-MODEL', 'VGGT-SEGFORMER', 'UNETPLUSPLUS-MODEL', 'VGGT-UNETPP'].includes(selectedModel) && (
+            <ModelInfoCard modelName={selectedModel} token={token} />
+          )}
 
           {/* Images Upload */}
           <div>

@@ -9,7 +9,7 @@ from pydantic import BaseModel, Field
 from .auth import require_auth
 from .db import execute, fetch_all, fetch_one
 from .gcs import mint_signed_get_url
-from .models import get_model_by_name
+from .models import get_model_by_name, get_model_by_name_async
 from .training import run_eval, run_finetune
 
 router = APIRouter(prefix="/jobs", tags=["jobs"])
@@ -105,7 +105,7 @@ async def list_jobs(user_id: UUID = Depends(require_auth)):
 @router.post("/eval", response_model=JobResponse, status_code=201)
 async def create_eval_job(body: CreateJobRequest, user_id: UUID = Depends(require_auth)):
     """Create a new evaluation/inference job."""
-    model = get_model_by_name(body.model_name)
+    model = await get_model_by_name_async(body.model_name, str(user_id))
     if not model:
         raise HTTPException(status_code=400, detail=f"Unknown model: {body.model_name}")
 
@@ -131,7 +131,7 @@ async def create_eval_job(body: CreateJobRequest, user_id: UUID = Depends(requir
 @router.post("/finetune", response_model=JobResponse, status_code=201)
 async def create_finetune_job(body: CreateJobRequest, user_id: UUID = Depends(require_auth)):
     """Create a new fine-tuning job."""
-    model = get_model_by_name(body.model_name)
+    model = await get_model_by_name_async(body.model_name, str(user_id))
     if not model:
         raise HTTPException(status_code=400, detail=f"Unknown model: {body.model_name}")
 

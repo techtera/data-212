@@ -38,6 +38,32 @@ def get_model_by_name(model_name: str) -> dict | None:
     return None
 
 
+async def get_model_by_name_async(model_name: str, user_id: str = "") -> dict | None:
+    """Check models.json first, then user_models DB table."""
+    result = get_model_by_name(model_name)
+    if result:
+        return result
+    if user_id:
+        from .db import fetch_one as _fetch_one
+        um = await _fetch_one(
+            "SELECT * FROM user_models WHERE model_name = $1 AND user_id = $2",
+            model_name, user_id,
+        )
+        if um:
+            base_model_info = get_model_by_name(um["base_model"])
+            return {
+                "model_name": um["model_name"],
+                "category": um["category"],
+                "load_path": f"gs://terafac-datasets/{um['checkpoint_path']}",
+                "inference_script": base_model_info["inference_script"] if base_model_info else "",
+                "finetune_script": "",
+                "usr_inference_script": f"gs://terafac-datasets/{um['inference_script']}" if um["inference_script"] else "",
+                "save_path": "",
+                "user_id": str(um["user_id"]),
+            }
+    return None
+
+
 @router.get("", response_model=list[ModelEntry])
 async def list_models(user_id: UUID = Depends(require_auth)):
     """List models available to the current user (pretrained + user's finetuned)."""
