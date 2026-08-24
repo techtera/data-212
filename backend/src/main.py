@@ -11,6 +11,7 @@ from .db import close_pool, init_pool
 from .auth import router as auth_router
 from .jobs import router as jobs_router
 from .models import router as models_router
+from .research import router as research_router
 from .uploads import router as uploads_router
 
 logging.basicConfig(
@@ -51,6 +52,7 @@ app.add_middleware(
 app.include_router(auth_router)
 app.include_router(jobs_router)
 app.include_router(models_router)
+app.include_router(research_router)
 app.include_router(uploads_router)
 
 

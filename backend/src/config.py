@@ -25,6 +25,9 @@ class Settings(BaseSettings):
     BCRYPT_ROUNDS: int = 12
     SESSION_TTL_HOURS: int = 24
 
+    # Gemini
+    GEMINI_API_KEY: str = ""
+
     model_config = {"env_file": ".env", "extra": "ignore"}
 
     @property

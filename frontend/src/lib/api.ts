@@ -69,6 +69,20 @@ export function getModelViz(token: string, modelName: string) {
   return request<{ inputs: string[]; outputs: string[] }>(`/models/${encodeURIComponent(modelName)}/viz`, {}, token);
 }
 
+// Research Agent
+export interface ResearchResult {
+  recommendation: string;
+  suggested_model: string;
+  reasoning: string;
+}
+
+export function runResearch(token: string, prompt: string) {
+  return request<ResearchResult>('/research', {
+    method: 'POST',
+    body: JSON.stringify({ prompt }),
+  }, token);
+}
+
 // Jobs
 export interface Job {
   id: string;

@@ -13,10 +13,12 @@ import {
   runEval,
   runFinetune,
   getModels,
+  runResearch,
   type Model,
+  type ResearchResult,
 } from '@/lib/api';
 import { toast } from 'sonner';
-import { Upload, FlaskConical, Wrench } from 'lucide-react';
+import { Upload, FlaskConical, Wrench, Search } from 'lucide-react';
 import { ModelInfoCard } from '@/components/model-info-card';
 
 function NewJobContent() {
@@ -34,6 +36,10 @@ function NewJobContent() {
   const [submitting, setSubmitting] = useState(false);
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [showModelInfo, setShowModelInfo] = useState(false);
+  const [showResearch, setShowResearch] = useState(false);
+  const [researchPrompt, setResearchPrompt] = useState('');
+  const [researching, setResearching] = useState(false);
+  const [researchResult, setResearchResult] = useState<ResearchResult | null>(null);
   const [epochs, setEpochs] = useState('');
   const [lr, setLr] = useState('');
   const imagesRef = useRef<HTMLInputElement>(null);
@@ -145,6 +151,72 @@ function NewJobContent() {
               <option value="finetune">Fine-tuning</option>
             </select>
           </div>
+
+          {/* Research Agent (finetune only) */}
+          {jobType === 'finetune' && (
+            <div className="border border-border rounded-lg p-3 bg-card/50">
+              <button
+                type="button"
+                onClick={() => setShowResearch(!showResearch)}
+                className="flex items-center gap-2 text-sm text-primary/80 hover:text-primary cursor-pointer"
+              >
+                <Search size={14} />
+                {showResearch ? '▾ Hide Research Agent' : '▸ Need help choosing a model?'}
+              </button>
+              {showResearch && (
+                <div className="mt-3 space-y-3">
+                  <textarea
+                    value={researchPrompt}
+                    onChange={(e) => setResearchPrompt(e.target.value)}
+                    disabled={researching}
+                    placeholder="Describe your task, data, and requirements. E.g.: I have 500 images of welded metal joints. I need to detect the weld seam boundaries for quality inspection..."
+                    className="w-full px-3 py-2 rounded-md bg-card border border-border text-sm text-foreground focus:outline-none focus:border-primary resize-none h-20 placeholder:text-muted"
+                  />
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      if (!token || !researchPrompt.trim()) return;
+                      setResearching(true);
+                      setResearchResult(null);
+                      try {
+                        const res = await runResearch(token, researchPrompt.trim());
+                        setResearchResult(res);
+                      } catch (err) {
+                        toast.error(err instanceof Error ? err.message : 'Research failed');
+                      } finally {
+                        setResearching(false);
+                      }
+                    }}
+                    disabled={researching || !researchPrompt.trim()}
+                    className="px-3 py-1.5 rounded-md bg-primary text-primary-foreground text-sm font-medium hover:opacity-90 disabled:opacity-50 cursor-pointer disabled:cursor-not-allowed"
+                  >
+                    {researching ? 'Researching...' : 'Get Recommendation'}
+                  </button>
+                  {researchResult && (
+                    <div className="border border-primary/30 rounded-md p-3 bg-primary/5 space-y-2">
+                      <p className="text-sm font-medium text-primary">Suggested: {researchResult.suggested_model}</p>
+                      <p className="text-xs text-foreground">{researchResult.reasoning}</p>
+                      {researchResult.recommendation !== researchResult.reasoning && (
+                        <p className="text-xs text-muted">{researchResult.recommendation}</p>
+                      )}
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setSelectedModel(researchResult.suggested_model);
+                          const m = models.find(x => x.model_name === researchResult.suggested_model);
+                          if (m) setCategory(m.category as 'object_mask' | 'edge_mask');
+                          toast.success(`Model set to ${researchResult.suggested_model}`);
+                        }}
+                        className="px-3 py-1 rounded-md bg-primary text-primary-foreground text-xs font-medium hover:opacity-90 cursor-pointer"
+                      >
+                        Use this model
+                      </button>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
 
           {/* Job Name */}
           <div>
