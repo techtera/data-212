@@ -6,7 +6,7 @@ import { getModelViz } from '@/lib/api';
 const MODEL_DESC: Record<string, { desc: string; inputFormat: string }> = {
   'YOLO11L-MASKING-MODEL': {
     desc: 'Detects and segments objects (weld pieces, industrial parts) in images. Draws colored mask overlays on detected regions.',
-    inputFormat: 'Images: .zip of PNG/JPG files (e.g. part_001.png, part_002.jpg). Masks (finetune): .zip of .txt files with same name (e.g. part_001.txt, part_002.txt) containing YOLO polygon coordinates.',
+    inputFormat: 'Images: .zip of PNG/JPG files (e.g. part_001.png, part_002.png). Masks (finetune): .zip of .txt files with same name (e.g. part_001.txt, part_002.txt) containing YOLO polygon coordinates.',
   },
   'VGGT-SEGFORMER': {
     desc: 'Segments objects using a large vision transformer. Produces red mask overlays on detected object regions. Best for complex scenes.',
