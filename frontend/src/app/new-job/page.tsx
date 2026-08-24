@@ -223,11 +223,13 @@ function NewJobContent() {
             <label className="block text-sm font-medium mb-1">Images (ZIP)</label>
             <div
               onClick={() => !submitting && imagesRef.current?.click()}
+              onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); }}
+              onDrop={(e) => { e.preventDefault(); e.stopPropagation(); if (!submitting && e.dataTransfer.files[0]) setImagesFile(e.dataTransfer.files[0]); }}
               className={`border border-dashed border-border rounded-md p-4 text-center cursor-pointer hover:border-primary/50 transition-colors ${submitting ? 'opacity-50 pointer-events-none' : ''}`}
             >
               <Upload size={20} className="mx-auto mb-1 text-muted" />
               <p className="text-sm text-muted">
-                {imagesFile ? imagesFile.name : 'Click to select images.zip'}
+                {imagesFile ? imagesFile.name : 'Click or drag images.zip here'}
               </p>
             </div>
             <input
@@ -245,11 +247,13 @@ function NewJobContent() {
             <label className="block text-sm font-medium mb-1">Masks (ZIP)</label>
             <div
               onClick={() => !submitting && masksRef.current?.click()}
+              onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); }}
+              onDrop={(e) => { e.preventDefault(); e.stopPropagation(); if (!submitting && e.dataTransfer.files[0]) setMasksFile(e.dataTransfer.files[0]); }}
               className={`border border-dashed border-border rounded-md p-4 text-center cursor-pointer hover:border-primary/50 transition-colors ${submitting ? 'opacity-50 pointer-events-none' : ''}`}
             >
               <Upload size={20} className="mx-auto mb-1 text-muted" />
               <p className="text-sm text-muted">
-                {masksFile ? masksFile.name : 'Click to select masks.zip'}
+                {masksFile ? masksFile.name : 'Click or drag masks.zip here'}
               </p>
             </div>
             <input
