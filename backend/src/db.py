@@ -34,7 +34,7 @@ CREATE TABLE IF NOT EXISTS jobs (
     name VARCHAR(128),
     job_type VARCHAR(16) NOT NULL CHECK (job_type IN ('eval', 'finetune')),
     status VARCHAR(16) NOT NULL DEFAULT 'uploading' CHECK (status IN ('uploading', 'running', 'done', 'error')),
-    model_id VARCHAR(32) NOT NULL,
+    model_id VARCHAR(128) NOT NULL,
     dataset_id VARCHAR(64) NOT NULL,
     gcs_images_zip VARCHAR(512) NOT NULL,
     gcs_masks_zip VARCHAR(512) NOT NULL,
@@ -78,6 +78,7 @@ async def init_pool(dsn: str) -> None:
             async with _pool.acquire() as conn:
                 await conn.execute(SQL_CREATE_TABLES)
                 await conn.execute("ALTER TABLE jobs ADD COLUMN IF NOT EXISTS name VARCHAR(128);")
+                await conn.execute("ALTER TABLE jobs ALTER COLUMN model_id TYPE VARCHAR(128);")
             return
         except OSError as e:
             logger.warning("DB connection attempt %d failed: %s", attempt + 1, e)
