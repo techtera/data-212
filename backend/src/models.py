@@ -47,7 +47,7 @@ async def get_model_by_name_async(model_name: str, user_id: str = "") -> dict | 
         from .db import fetch_one as _fetch_one
         um = await _fetch_one(
             "SELECT * FROM user_models WHERE model_name = $1 AND user_id = $2",
-            model_name, user_id,
+            model_name, UUID(user_id),
         )
         if um:
             base_model_info = get_model_by_name(um["base_model"])

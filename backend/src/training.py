@@ -7,7 +7,7 @@ import random
 
 from .config import settings
 from .db import execute, fetch_all, fetch_one
-from .models import get_model_by_name
+from .models import get_model_by_name, get_model_by_name_async
 
 logger = logging.getLogger(__name__)
 
@@ -136,7 +136,7 @@ def _ssh_exec(client, command: str) -> str:
 
 async def _ssh_eval(job_id: str, model_name: str, job_name: str, owner_id: str = "") -> None:
     """Run evaluation on the GCP VM via SSH inside a screen session."""
-    model_info = get_model_by_name(model_name)
+    model_info = await get_model_by_name_async(model_name, owner_id)
     if not model_info:
         raise RuntimeError(f"Model not found: {model_name}")
 
@@ -343,7 +343,7 @@ async def _poll_vm_job(job_id: str, job_dir: str, bucket: str, job_name: str, ow
 
 async def _ssh_finetune(job_id: str, model_name: str, job_name: str, owner_id: str = "") -> None:
     """Run fine-tuning on the GCP VM via SSH inside a screen session."""
-    model_info = get_model_by_name(model_name)
+    model_info = await get_model_by_name_async(model_name, owner_id)
     if not model_info:
         raise RuntimeError(f"Model not found: {model_name}")
 
