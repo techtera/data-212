@@ -8,6 +8,7 @@ from fastapi import APIRouter, Depends
 from pydantic import BaseModel
 
 from .auth import require_auth
+from .db import fetch_all
 from .gcs import mint_signed_get_url
 
 router = APIRouter(prefix="/models", tags=["models"])
@@ -45,6 +46,22 @@ async def list_models(user_id: UUID = Depends(require_auth)):
         m for m in all_models
         if m["user_id"] == "" or m["user_id"] == str(user_id)
     ]
+
+    user_models = await fetch_all(
+        "SELECT * FROM user_models WHERE user_id = $1 ORDER BY created_at DESC", user_id
+    )
+    for um in user_models:
+        visible.append({
+            "model_name": um["model_name"],
+            "category": um["category"],
+            "load_path": um["checkpoint_path"],
+            "inference_script": um["inference_script"],
+            "finetune_script": "",
+            "usr_inference_script": um["inference_script"],
+            "save_path": "",
+            "user_id": str(um["user_id"]),
+        })
+
     return visible
 
 

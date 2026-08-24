@@ -48,10 +48,24 @@ CREATE TABLE IF NOT EXISTS jobs (
     updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
+CREATE TABLE IF NOT EXISTS user_models (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id UUID REFERENCES users(id) ON DELETE CASCADE,
+    model_name VARCHAR(128) NOT NULL,
+    category VARCHAR(32) NOT NULL,
+    base_model VARCHAR(128) NOT NULL,
+    checkpoint_path VARCHAR(512) NOT NULL,
+    inference_script VARCHAR(512) NOT NULL,
+    version INT DEFAULT 1,
+    job_id UUID REFERENCES jobs(id),
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
 CREATE INDEX IF NOT EXISTS idx_sessions_token_hash ON sessions(token_hash);
 CREATE INDEX IF NOT EXISTS idx_sessions_user_id ON sessions(user_id);
 CREATE INDEX IF NOT EXISTS idx_jobs_owner_id ON jobs(owner_id);
 CREATE INDEX IF NOT EXISTS idx_jobs_status ON jobs(status);
+CREATE INDEX IF NOT EXISTS idx_user_models_user_id ON user_models(user_id);
 """
 
 

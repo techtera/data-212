@@ -6,19 +6,19 @@ import { getModelViz } from '@/lib/api';
 const MODEL_DESC: Record<string, { desc: string; inputFormat: string }> = {
   'YOLO11L-MASKING-MODEL': {
     desc: 'Detects and segments objects (weld pieces, industrial parts) in images. Draws colored mask overlays on detected regions.',
-    inputFormat: 'Images: .zip of PNG/JPG files. Masks (finetune): .zip of YOLO .txt label files (polygon coordinates, same filename as image).',
+    inputFormat: 'Images: .zip of PNG/JPG files (e.g. part_001.png, part_002.jpg). Masks (finetune): .zip of .txt files with same name (e.g. part_001.txt, part_002.txt) containing YOLO polygon coordinates.',
   },
   'VGGT-SEGFORMER': {
     desc: 'Segments objects using a large vision transformer. Produces red mask overlays on detected object regions. Best for complex scenes.',
-    inputFormat: 'Images: .zip of PNG/JPG files. Masks (finetune): .zip of YOLO .txt label files (polygon coordinates, same filename as image).',
+    inputFormat: 'Images: .zip of PNG/JPG files (e.g. sample_1.png, sample_2.png). Masks (finetune): .zip of .txt files with same name (e.g. sample_1.txt, sample_2.txt) containing YOLO polygon coordinates.',
   },
   'UNETPLUSPLUS-MODEL': {
     desc: 'Detects edges and boundaries in images. Produces thin green edge overlays — useful for measuring contours, weld seams, and part boundaries.',
-    inputFormat: 'Images: .zip of PNG/JPG files. Masks (finetune): .zip of binary PNG edge masks (filename: imagename_mask.png).',
+    inputFormat: 'Images: .zip of PNG/JPG files (e.g. weld_01.png, weld_02.png). Masks (finetune): .zip of PNG files with _mask suffix (e.g. weld_01_mask.png, weld_02_mask.png) — white edges on black background.',
   },
   'VGGT-UNETPP': {
     desc: 'Detects edges using a large vision transformer backbone. Produces green edge overlays — higher accuracy than UNet++ on complex geometries.',
-    inputFormat: 'Images: .zip of PNG/JPG files. Masks (finetune): .zip of binary PNG edge masks (filename: imagename_mask.png).',
+    inputFormat: 'Images: .zip of PNG/JPG files (e.g. edge_01.png, edge_02.png). Masks (finetune): .zip of PNG files with _mask suffix (e.g. edge_01_mask.png, edge_02_mask.png) — white edges on black background.',
   },
 };
 
@@ -49,17 +49,20 @@ export function ModelInfoCard({ modelName, token }: Props) {
       {viz && viz.inputs.length > 0 && (
         <div>
           <p className="text-xs text-muted font-medium mb-2">Sample Input → Output:</p>
-          <div className="grid grid-cols-2 gap-2">
-            {viz.inputs.map((url, i) => (
-              <div key={i} className="space-y-1">
-                <img src={url} alt={`Input ${i+1}`} className="w-full h-24 object-cover rounded border border-border" loading="lazy" />
+          {viz.inputs.map((url, i) => (
+            <div key={i} className="grid grid-cols-2 gap-2 mb-2">
+              <div>
+                {i === 0 && <p className="text-xs text-muted mb-1">Input</p>}
+                <img src={url} alt={`Input ${i+1}`} className="w-full h-28 object-cover rounded border border-border" loading="lazy" />
+              </div>
+              <div>
+                {i === 0 && <p className="text-xs text-muted mb-1">Prediction</p>}
                 {viz.outputs[i] && (
-                  <img src={viz.outputs[i]} alt={`Output ${i+1}`} className="w-full h-24 object-cover rounded border border-primary/30" loading="lazy" />
+                  <img src={viz.outputs[i]} alt={`Output ${i+1}`} className="w-full h-28 object-cover rounded border border-primary/30" loading="lazy" />
                 )}
               </div>
-            ))}
-          </div>
-          <p className="text-xs text-muted mt-1">Top: input image. Bottom: model prediction.</p>
+            </div>
+          ))}
         </div>
       )}
     </div>

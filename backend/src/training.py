@@ -6,7 +6,7 @@ import logging
 import random
 
 from .config import settings
-from .db import execute, fetch_one
+from .db import execute, fetch_all, fetch_one
 from .models import get_model_by_name
 
 logger = logging.getLogger(__name__)
@@ -586,7 +586,29 @@ async def _poll_vm_finetune(job_id: str, job_dir: str, bucket: str, job_name: st
                         job_id,
                     )
                     _ssh_exec(client, f"rm -rf {job_dir}")
-                    logger.info("Finetune job %s completed, VM cleaned", job_id)
+
+                    # Register finetuned model for the user
+                    model_info_reg = get_model_by_name(model_name)
+                    category = model_info_reg.get("category", "object_mask") if model_info_reg else "object_mask"
+                    usr_script = model_info_reg.get("usr_inference_script", "") if model_info_reg else ""
+                    checkpoint_gcs = f"finetune/{owner_id}/{job_name}/{model_name}/best.pt"
+
+                    # Get version number
+                    existing = await fetch_all(
+                        "SELECT version FROM user_models WHERE user_id = $1 AND base_model = $2 ORDER BY version DESC LIMIT 1",
+                        owner_id, model_name,
+                    )
+                    version = (existing[0]["version"] + 1) if existing else 1
+                    finetuned_name = f"{job_name}_{model_name}_v_{version}"
+
+                    await execute(
+                        """INSERT INTO user_models (user_id, model_name, category, base_model, checkpoint_path, inference_script, version, job_id)
+                           VALUES ($1, $2, $3, $4, $5, $6, $7, $8)""",
+                        owner_id, finetuned_name, category, model_name, checkpoint_gcs,
+                        usr_script.replace("gs://terafac-datasets/", "") if usr_script.startswith("gs://") else usr_script,
+                        version, job_id,
+                    )
+                    logger.info("Finetune job %s completed, registered as '%s', VM cleaned", job_id, finetuned_name)
                     return
 
             finally:
