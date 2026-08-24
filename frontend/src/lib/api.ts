@@ -65,6 +65,10 @@ export function getModels(token: string) {
   return request<Model[]>('/models', {}, token);
 }
 
+export function getModelViz(token: string, modelName: string) {
+  return request<{ inputs: string[]; outputs: string[] }>(`/models/${encodeURIComponent(modelName)}/viz`, {}, token);
+}
+
 // Jobs
 export interface Job {
   id: string;

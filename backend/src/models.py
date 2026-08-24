@@ -8,6 +8,7 @@ from fastapi import APIRouter, Depends
 from pydantic import BaseModel
 
 from .auth import require_auth
+from .gcs import mint_signed_get_url
 
 router = APIRouter(prefix="/models", tags=["models"])
 
@@ -45,3 +46,35 @@ async def list_models(user_id: UUID = Depends(require_auth)):
         if m["user_id"] == "" or m["user_id"] == str(user_id)
     ]
     return visible
+
+
+VIZ_IMAGES: dict[str, dict] = {
+    "YOLO11L-MASKING-MODEL": {
+        "inputs": ["visualization/YOLO11L-MASKING-MODEL/input_00e301cb-1784708951336000000_1.png", "visualization/YOLO11L-MASKING-MODEL/input_0a07478f-1785390020777458890_edge_42_mid.png"],
+        "outputs": ["visualization/YOLO11L-MASKING-MODEL/output_pred_0000_00e301cb-1784708951336000000_1.png", "visualization/YOLO11L-MASKING-MODEL/output_pred_0001_0a07478f-1785390020777458890_edge_42_mid.png"],
+    },
+    "VGGT-SEGFORMER": {
+        "inputs": ["visualization/VGGT-SEGFORMER/input_00e301cb-1784708951336000000_1.png", "visualization/VGGT-SEGFORMER/input_0a07478f-1785390020777458890_edge_42_mid.png"],
+        "outputs": ["visualization/VGGT-SEGFORMER/output_pred_0000_00e301cb-1784708951336000000_1.png", "visualization/VGGT-SEGFORMER/output_pred_0001_0a07478f-1785390020777458890_edge_42_mid.png"],
+    },
+    "UNETPLUSPLUS-MODEL": {
+        "inputs": ["visualization/UNETPLUSPLUS-MODEL/input_000cf964-1776404701334031000_aug00.png", "visualization/UNETPLUSPLUS-MODEL/input_000cf964-1776404701334031000_aug01.png"],
+        "outputs": ["visualization/UNETPLUSPLUS-MODEL/output_pred_0000_000cf964-1776404701334031000_aug00.png", "visualization/UNETPLUSPLUS-MODEL/output_pred_0001_000cf964-1776404701334031000_aug01.png"],
+    },
+    "VGGT-UNETPP": {
+        "inputs": ["visualization/VGGT-UNETPP/input_000cf964-1776404701334031000_aug00.png", "visualization/VGGT-UNETPP/input_000cf964-1776404701334031000_aug01.png"],
+        "outputs": ["visualization/VGGT-UNETPP/output_pred_0000_000cf964-1776404701334031000_aug00.png", "visualization/VGGT-UNETPP/output_pred_0001_000cf964-1776404701334031000_aug01.png"],
+    },
+}
+
+
+@router.get("/{model_name}/viz")
+async def get_model_viz(model_name: str, user_id: UUID = Depends(require_auth)):
+    """Get signed URLs for model sample visualization images."""
+    viz = VIZ_IMAGES.get(model_name, {})
+    if not viz:
+        return {"inputs": [], "outputs": []}
+    return {
+        "inputs": [mint_signed_get_url(p) for p in viz["inputs"]],
+        "outputs": [mint_signed_get_url(p) for p in viz["outputs"]],
+    }

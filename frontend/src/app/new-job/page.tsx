@@ -17,6 +17,7 @@ import {
 } from '@/lib/api';
 import { toast } from 'sonner';
 import { Upload, FlaskConical, Wrench } from 'lucide-react';
+import { ModelInfoCard } from '@/components/model-info-card';
 
 function NewJobContent() {
   const { token } = useAuth();
@@ -32,6 +33,7 @@ function NewJobContent() {
   const [step, setStep] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [showAdvanced, setShowAdvanced] = useState(false);
+  const [showModelInfo, setShowModelInfo] = useState(false);
   const [epochs, setEpochs] = useState('');
   const [lr, setLr] = useState('');
   const imagesRef = useRef<HTMLInputElement>(null);
@@ -204,7 +206,17 @@ function NewJobContent() {
                 </option>
               ))}
             </select>
+            <button
+              type="button"
+              onClick={() => setShowModelInfo(!showModelInfo)}
+              className="mt-1 text-xs text-primary/70 hover:text-primary cursor-pointer underline underline-offset-2"
+            >
+              {showModelInfo ? '▾ Hide model details' : '▸ What does this model do?'}
+            </button>
           </div>
+
+          {/* Model Info Card */}
+          {showModelInfo && <ModelInfoCard modelName={selectedModel} token={token} />}
 
           {/* Images Upload */}
           <div>
