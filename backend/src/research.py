@@ -109,15 +109,27 @@ The model name must be exactly one of: YOLO11L-MASKING-MODEL, VGGT-SEGFORMER, UN
 
         try:
             text_clean = text.strip()
-            if text_clean.startswith("```"):
-                text_clean = text_clean.split("\n", 1)[1].rsplit("```", 1)[0]
+            if "```" in text_clean:
+                text_clean = text_clean.split("```")[1]
+                if text_clean.startswith("json"):
+                    text_clean = text_clean[4:]
+                text_clean = text_clean.strip()
+            if "{" in text_clean:
+                json_start = text_clean.index("{")
+                json_end = text_clean.rindex("}") + 1
+                text_clean = text_clean[json_start:json_end]
             result = json.loads(text_clean)
-        except json.JSONDecodeError:
+        except (json.JSONDecodeError, ValueError):
+            clean_text = text.replace("```json", "").replace("```", "").strip()
             result = {
                 "suggested_model": "YOLO11L-MASKING-MODEL",
-                "reasoning": text[:500],
-                "recommendation": text[:1000],
+                "reasoning": clean_text[:500],
+                "recommendation": clean_text[:500],
             }
+            for model_name in ["VGGT-SEGFORMER", "VGGT-UNETPP", "UNETPLUSPLUS-MODEL", "YOLO11L-MASKING-MODEL"]:
+                if model_name in text:
+                    result["suggested_model"] = model_name
+                    break
 
         valid_models = [m["model_name"] for m in _load_models()]
         if result.get("suggested_model") not in valid_models:

@@ -154,63 +154,86 @@ function NewJobContent() {
 
           {/* Research Agent (finetune only) */}
           {jobType === 'finetune' && (
-            <div className="border border-border rounded-lg p-3 bg-card/50">
-              <button
-                type="button"
-                onClick={() => setShowResearch(!showResearch)}
-                className="flex items-center gap-2 text-sm text-primary/80 hover:text-primary cursor-pointer"
-              >
-                <Search size={14} />
-                {showResearch ? '▾ Hide Research Agent' : '▸ Need help choosing a model?'}
-              </button>
-              {showResearch && (
-                <div className="mt-3 space-y-3">
-                  <textarea
-                    value={researchPrompt}
-                    onChange={(e) => setResearchPrompt(e.target.value)}
-                    disabled={researching}
-                    placeholder="Describe your task, data, and requirements. E.g.: I have 500 images of welded metal joints. I need to detect the weld seam boundaries for quality inspection..."
-                    className="w-full px-3 py-2 rounded-md bg-card border border-border text-sm text-foreground focus:outline-none focus:border-primary resize-none h-20 placeholder:text-muted"
-                  />
-                  <button
-                    type="button"
-                    onClick={async () => {
-                      if (!token || !researchPrompt.trim()) return;
-                      setResearching(true);
-                      setResearchResult(null);
-                      try {
-                        const res = await runResearch(token, researchPrompt.trim());
-                        setResearchResult(res);
-                      } catch (err) {
-                        toast.error(err instanceof Error ? err.message : 'Research failed');
-                      } finally {
-                        setResearching(false);
-                      }
-                    }}
-                    disabled={researching || !researchPrompt.trim()}
-                    className="px-3 py-1.5 rounded-md bg-primary text-primary-foreground text-sm font-medium hover:opacity-90 disabled:opacity-50 cursor-pointer disabled:cursor-not-allowed"
-                  >
-                    {researching ? 'Researching...' : 'Get Recommendation'}
-                  </button>
+            <div>
+              {!showResearch ? (
+                <button
+                  type="button"
+                  onClick={() => setShowResearch(true)}
+                  className="w-full py-2.5 px-4 rounded-xl border border-dashed border-primary/30 text-sm text-primary/80 hover:text-primary hover:border-primary/60 hover:bg-primary/5 cursor-pointer transition-all flex items-center justify-center gap-2"
+                >
+                  <Search size={15} />
+                  Not sure which model to use? Ask AI
+                </button>
+              ) : (
+                <div className="rounded-2xl border border-border/60 bg-gradient-to-b from-card/80 to-card/40 backdrop-blur-sm overflow-hidden shadow-sm">
+                  <div className="px-4 py-3 flex items-center justify-between border-b border-border/40">
+                    <div className="flex items-center gap-2">
+                      <div className="w-6 h-6 rounded-full bg-primary/10 flex items-center justify-center">
+                        <Search size={12} className="text-primary" />
+                      </div>
+                      <span className="text-xs font-medium text-foreground/80">AI Model Advisor</span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setShowResearch(false)}
+                      className="text-xs text-muted hover:text-foreground cursor-pointer transition-colors"
+                    >
+                      Dismiss
+                    </button>
+                  </div>
+
+                  <div className="p-4 space-y-3">
+                    <textarea
+                      value={researchPrompt}
+                      onChange={(e) => setResearchPrompt(e.target.value)}
+                      disabled={researching}
+                      placeholder="Describe your images and what you want to segment...&#10;E.g.: 200 images of welded joints, need to detect weld seam boundaries"
+                      className="w-full px-3 py-2.5 rounded-xl bg-background/50 border border-border/50 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary/50 resize-none h-[68px] placeholder:text-muted/50 transition-all"
+                    />
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        if (!token || !researchPrompt.trim()) return;
+                        setResearching(true);
+                        setResearchResult(null);
+                        try {
+                          const res = await runResearch(token, researchPrompt.trim());
+                          setResearchResult(res);
+                        } catch (err) {
+                          toast.error(err instanceof Error ? err.message : 'Research failed');
+                        } finally {
+                          setResearching(false);
+                        }
+                      }}
+                      disabled={researching || !researchPrompt.trim()}
+                      className="px-4 py-2 rounded-xl bg-primary text-primary-foreground text-xs font-medium hover:brightness-110 disabled:opacity-40 cursor-pointer disabled:cursor-not-allowed transition-all shadow-sm"
+                    >
+                      {researching ? 'Analyzing...' : 'Get Recommendation'}
+                    </button>
+                  </div>
+
                   {researchResult && (
-                    <div className="border border-primary/30 rounded-md p-3 bg-primary/5 space-y-2">
-                      <p className="text-sm font-medium text-primary">Suggested: {researchResult.suggested_model}</p>
-                      <p className="text-xs text-foreground">{researchResult.reasoning}</p>
-                      {researchResult.recommendation !== researchResult.reasoning && (
-                        <p className="text-xs text-muted">{researchResult.recommendation}</p>
-                      )}
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setSelectedModel(researchResult.suggested_model);
-                          const m = models.find(x => x.model_name === researchResult.suggested_model);
-                          if (m) setCategory(m.category as 'object_mask' | 'edge_mask');
-                          toast.success(`Model set to ${researchResult.suggested_model}`);
-                        }}
-                        className="px-3 py-1 rounded-md bg-primary text-primary-foreground text-xs font-medium hover:opacity-90 cursor-pointer"
-                      >
-                        Use this model
-                      </button>
+                    <div className="mx-4 mb-4 p-3.5 rounded-xl bg-success/5 border border-success/20">
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="flex-1 min-w-0">
+                          <p className="text-[11px] font-medium text-success/80 uppercase tracking-wide mb-0.5">Recommended</p>
+                          <p className="text-sm font-semibold text-foreground truncate">{researchResult.suggested_model}</p>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setSelectedModel(researchResult.suggested_model);
+                            const m = models.find(x => x.model_name === researchResult.suggested_model);
+                            if (m) setCategory(m.category as 'object_mask' | 'edge_mask');
+                            setShowResearch(false);
+                            toast.success(`Model set to ${researchResult.suggested_model}`);
+                          }}
+                          className="shrink-0 px-3.5 py-1.5 rounded-lg bg-success text-white text-xs font-medium hover:brightness-110 cursor-pointer transition-all shadow-sm"
+                        >
+                          Use this
+                        </button>
+                      </div>
+                      <p className="text-xs text-muted leading-relaxed mt-2">{researchResult.reasoning}</p>
                     </div>
                   )}
                 </div>
