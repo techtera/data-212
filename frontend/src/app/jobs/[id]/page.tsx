@@ -110,9 +110,9 @@ function JobDetailContent() {
     <div className="min-h-screen">
       <Navbar />
       <main className="max-w-4xl mx-auto px-8 py-10">
-        <Link href="/" className="inline-flex items-center gap-1 text-sm text-muted hover:text-foreground mb-6 transition-colors">
-          <ArrowLeft size={14} />
-          Back to Dashboard
+        <Link href="/" className="inline-flex items-center gap-2 text-sm font-semibold text-primary bg-primary/10 hover:bg-primary/20 px-4 py-2 rounded-xl border border-primary/25 hover:border-primary/40 mb-8 transition-all">
+          <ArrowLeft size={15} />
+          Dashboard
         </Link>
 
         {loading ? (
@@ -128,13 +128,13 @@ function JobDetailContent() {
             {/* Header */}
             <div className="flex items-start justify-between">
               <div>
-                <h1 className="text-xl font-semibold">
+                <h1 className="text-2xl font-bold tracking-tight text-foreground">
                   {job.name || `${job.job_type === 'eval' ? 'Inference' : 'Fine-tuning'} Job`}
                 </h1>
-                <p className="text-sm text-muted mt-1">
+                <p className="text-sm text-foreground/60 mt-1.5">
                   {job.job_type === 'eval' ? 'Inference' : 'Fine-tuning'} &middot; {job.model_name}
                 </p>
-                <p className="text-sm text-muted">
+                <p className="text-sm text-foreground/40">
                   Created: {new Date(job.created_at).toLocaleString()}
                 </p>
               </div>
@@ -187,7 +187,7 @@ function JobDetailContent() {
             {/* Inference results */}
             {job.status === 'done' && job.job_type === 'eval' && (
               <div className="space-y-5">
-                <h2 className="text-lg font-medium">Inference Complete</h2>
+                <h2 className="text-xl font-bold text-foreground">Inference Complete</h2>
 
                 {/* Prediction images */}
                 {results?.prediction_urls && results.prediction_urls.length > 0 && (
@@ -211,64 +211,74 @@ function JobDetailContent() {
             {/* Finetune results */}
             {job.status === 'done' && job.job_type === 'finetune' && (
               <div className="space-y-5">
-                <h2 className="text-lg font-medium">Fine-tuning Complete</h2>
+                <h2 className="text-xl font-bold text-success">Fine-tuning Complete</h2>
 
                 {/* Training metrics */}
                 {results?.artifacts && (
-                  <div className="border border-border/40 rounded-2xl p-4 bg-card/40">
-                    <h3 className="text-sm font-medium mb-3">Training Summary</h3>
-                    <div className="grid grid-cols-2 gap-3 text-sm mb-3">
-                      {results.artifacts.epochs_trained ? (
-                        <div><span className="text-muted">epochs trained:</span> <span className="font-medium">{String(results.artifacts.epochs_trained)}</span></div>
-                      ) : null}
-                      {results.artifacts.best_epoch ? (
-                        <div><span className="text-muted">best epoch:</span> <span className="font-medium">{String(results.artifacts.best_epoch)}</span></div>
-                      ) : null}
-                      {results.artifacts.train_samples ? (
-                        <div><span className="text-muted">train samples:</span> <span className="font-medium">{String(results.artifacts.train_samples)}</span></div>
-                      ) : null}
-                      {results.artifacts.val_samples ? (
-                        <div><span className="text-muted">val samples:</span> <span className="font-medium">{String(results.artifacts.val_samples)}</span></div>
-                      ) : null}
+                  <div className="rounded-2xl overflow-hidden border border-primary/20 bg-gradient-to-br from-card/80 via-card/60 to-primary/5">
+                    <div className="px-6 py-4 border-b border-primary/10 bg-primary/5">
+                      <h3 className="text-lg font-bold text-foreground">Training Summary</h3>
                     </div>
 
-                    {/* Train metrics */}
-                    {(() => {
-                      const tm = results.artifacts?.train_metrics as Record<string, number> | undefined;
-                      if (!tm || typeof tm !== 'object') return null;
-                      return (
-                        <div className="mb-3">
-                          <h4 className="text-xs font-medium text-muted mb-2 uppercase">Train Metrics</h4>
-                          <div className="grid grid-cols-2 lg:grid-cols-3 gap-3 text-sm">
-                            {Object.entries(tm).map(([k, v]) => (
-                              <div key={k}>
-                                <span className="text-muted">{k.replace(/_/g, ' ')}:</span>{' '}
-                                <span className="font-medium">{typeof v === 'number' ? v.toFixed(4) : String(v)}</span>
-                              </div>
-                            ))}
+                    <div className="p-6">
+                      {/* Stats row */}
+                      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-6">
+                        {results.artifacts.epochs_trained ? (
+                          <div className="rounded-xl p-4 bg-gradient-to-br from-primary/15 to-primary/5 border border-primary/20">
+                            <p className="text-xs font-medium text-primary/80 mb-1">Epochs</p>
+                            <p className="text-2xl font-bold text-primary">{String(results.artifacts.epochs_trained)}</p>
                           </div>
-                        </div>
-                      );
-                    })()}
+                        ) : null}
+                        {results.artifacts.best_epoch ? (
+                          <div className="rounded-xl p-4 bg-gradient-to-br from-success/15 to-success/5 border border-success/20">
+                            <p className="text-xs font-medium text-success/80 mb-1">Best Epoch</p>
+                            <p className="text-2xl font-bold text-success">{String(results.artifacts.best_epoch)}</p>
+                          </div>
+                        ) : null}
+                        {results.artifacts.train_samples ? (
+                          <div className="rounded-xl p-4 bg-gradient-to-br from-warning/15 to-warning/5 border border-warning/20">
+                            <p className="text-xs font-medium text-warning/80 mb-1">Train Samples</p>
+                            <p className="text-2xl font-bold text-warning">{String(results.artifacts.train_samples)}</p>
+                          </div>
+                        ) : null}
+                        {results.artifacts.val_samples ? (
+                          <div className="rounded-xl p-4 bg-gradient-to-br from-accent/15 to-accent/5 border border-accent/20">
+                            <p className="text-xs font-medium text-accent/80 mb-1">Val Samples</p>
+                            <p className="text-2xl font-bold text-accent">{String(results.artifacts.val_samples)}</p>
+                          </div>
+                        ) : null}
+                      </div>
 
-                    {/* Val metrics */}
-                    {(() => {
-                      const vm = results.artifacts?.val_metrics as Record<string, number> | undefined;
-                      if (!vm || typeof vm !== 'object') return null;
-                      return (
-                        <div>
-                          <h4 className="text-xs font-medium text-muted mb-2 uppercase">Val Metrics</h4>
-                          <div className="grid grid-cols-2 lg:grid-cols-3 gap-3 text-sm">
-                            {Object.entries(vm).map(([k, v]) => (
-                              <div key={k}>
-                                <span className="text-muted">{k.replace(/_/g, ' ')}:</span>{' '}
-                                <span className="font-medium">{typeof v === 'number' ? v.toFixed(4) : String(v)}</span>
-                              </div>
-                            ))}
+                      {/* Metrics table */}
+                      {(() => {
+                        const tm = results.artifacts?.train_metrics as Record<string, number> | undefined;
+                        const vm = results.artifacts?.val_metrics as Record<string, number> | undefined;
+                        if (!tm && !vm) return null;
+                        const keys = Object.keys(tm || vm || {});
+                        return (
+                          <div className="overflow-hidden rounded-xl border border-border/40">
+                            <table className="w-full text-sm">
+                              <thead>
+                                <tr className="bg-gradient-to-r from-primary/10 via-transparent to-success/10">
+                                  <th className="text-left px-5 py-3 text-xs font-bold text-foreground/80 uppercase tracking-wider">Metric</th>
+                                  {tm && <th className="text-right px-5 py-3 text-xs font-bold text-primary uppercase tracking-wider">Train</th>}
+                                  {vm && <th className="text-right px-5 py-3 text-xs font-bold text-success uppercase tracking-wider">Val</th>}
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {keys.map((k, i) => (
+                                  <tr key={k} className={`${i % 2 === 0 ? 'bg-card/30' : 'bg-card/60'} hover:bg-primary/5 transition-colors`}>
+                                    <td className="px-5 py-3 text-foreground/80 font-medium capitalize">{k.replace(/_/g, ' ')}</td>
+                                    {tm && <td className="text-right px-5 py-3 font-bold text-primary/90 tabular-nums">{typeof tm[k] === 'number' ? tm[k].toFixed(4) : '—'}</td>}
+                                    {vm && <td className="text-right px-5 py-3 font-bold text-success/90 tabular-nums">{typeof vm[k] === 'number' ? vm[k].toFixed(4) : '—'}</td>}
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
                           </div>
-                        </div>
-                      );
-                    })()}
+                        );
+                      })()}
+                    </div>
                   </div>
                 )}
 
@@ -294,7 +304,7 @@ function JobDetailContent() {
                     className="flex items-center gap-2 px-5 py-2.5 rounded-xl border border-border/50 text-foreground text-sm font-medium hover:bg-card/60 transition-all cursor-pointer"
                   >
                     <Download size={16} />
-                    Download Inference Script
+                    View Inference Script
                   </button>
                 </div>
 

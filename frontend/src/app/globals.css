@@ -1,25 +1,26 @@
 @import "tailwindcss";
 
 @theme inline {
-  --color-background: oklch(0.13 0.005 260);
-  --color-foreground: oklch(0.93 0.005 260);
-  --color-card: oklch(0.18 0.008 260);
-  --color-border: oklch(0.26 0.01 260);
-  --color-primary: oklch(0.62 0.18 250);
-  --color-primary-foreground: oklch(0.98 0 0);
-  --color-muted: oklch(0.45 0.01 260);
-  --color-destructive: oklch(0.58 0.2 25);
-  --color-success: oklch(0.6 0.18 150);
-  --color-warning: oklch(0.7 0.14 85);
+  --color-background: oklch(0.14 0.008 260);
+  --color-foreground: oklch(0.95 0.005 250);
+  --color-card: oklch(0.19 0.012 260);
+  --color-border: oklch(0.28 0.015 260);
+  --color-primary: oklch(0.68 0.16 240);
+  --color-primary-foreground: oklch(0.99 0 0);
+  --color-muted: oklch(0.55 0.01 250);
+  --color-destructive: oklch(0.62 0.22 20);
+  --color-success: oklch(0.65 0.2 155);
+  --color-warning: oklch(0.75 0.15 75);
+  --color-accent: oklch(0.6 0.18 300);
 }
 
 html, body {
   background-color: var(--color-background);
   color: var(--color-foreground);
-  font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'SF Pro Text', system-ui, sans-serif;
+  font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'SF Pro Text', 'Inter', system-ui, sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-  letter-spacing: -0.01em;
+  letter-spacing: -0.011em;
 }
 
 * {
@@ -31,5 +32,5 @@ input, select, textarea, button {
 }
 
 ::selection {
-  background-color: oklch(0.62 0.18 250 / 0.3);
+  background-color: oklch(0.68 0.16 240 / 0.3);
 }

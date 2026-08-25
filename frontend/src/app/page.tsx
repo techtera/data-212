@@ -43,8 +43,8 @@ function DashboardContent() {
       <main className="px-8 py-10 max-w-[1400px] mx-auto">
         <div className="flex items-center justify-between mb-8">
           <div>
-            <h1 className="text-2xl font-semibold tracking-tight">Your Jobs</h1>
-            <p className="text-sm text-muted mt-0.5">{jobs.length} total</p>
+            <h1 className="text-2xl font-semibold tracking-tight">Welcome back</h1>
+            <p className="text-sm text-muted mt-0.5">{jobs.length} {jobs.length === 1 ? 'job' : 'jobs'}</p>
           </div>
           <Link
             href="/new-job"

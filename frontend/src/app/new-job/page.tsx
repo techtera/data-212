@@ -135,21 +135,43 @@ function NewJobContent() {
     <div className="min-h-screen">
       <Navbar />
       <main className="max-w-2xl mx-auto px-8 py-10">
-        <h1 className="text-2xl font-semibold tracking-tight mb-8">Create New Job</h1>
+        <div className="mb-8">
+          <h1 className="text-2xl font-bold tracking-tight text-foreground">Create New Job</h1>
+          <p className="text-sm text-foreground/50 mt-1">Run inference or fine-tune a model on your data</p>
+        </div>
 
         <div className="space-y-5">
           {/* Job Type */}
           <div>
-            <label className="block text-xs font-medium text-muted mb-1.5">Task</label>
-            <select
-              value={jobType}
-              onChange={(e) => setJobType(e.target.value as 'eval' | 'finetune')}
-              disabled={submitting}
-              className="w-full px-3.5 py-2.5 rounded-xl bg-card/60 border border-border/50 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary/50 text-foreground text-sm cursor-pointer transition-all"
-            >
-              <option value="eval">Inference</option>
-              <option value="finetune">Fine-tuning</option>
-            </select>
+            <label className="block text-xs font-semibold text-foreground/70 mb-2 uppercase tracking-wider">Task</label>
+            <div className="grid grid-cols-2 gap-3">
+              <button
+                type="button"
+                onClick={() => setJobType('eval')}
+                disabled={submitting}
+                className={`py-3.5 px-4 rounded-xl text-sm font-semibold border-2 transition-all cursor-pointer flex items-center justify-center gap-2 ${
+                  jobType === 'eval'
+                    ? 'bg-gradient-to-br from-primary/20 to-primary/5 border-primary/50 text-primary shadow-sm shadow-primary/10'
+                    : 'bg-card/40 border-border/30 text-foreground/60 hover:border-border/60 hover:text-foreground/80'
+                }`}
+              >
+                <FlaskConical size={16} />
+                Inference
+              </button>
+              <button
+                type="button"
+                onClick={() => setJobType('finetune')}
+                disabled={submitting}
+                className={`py-3.5 px-4 rounded-xl text-sm font-semibold border-2 transition-all cursor-pointer flex items-center justify-center gap-2 ${
+                  jobType === 'finetune'
+                    ? 'bg-gradient-to-br from-warning/20 to-warning/5 border-warning/50 text-warning shadow-sm shadow-warning/10'
+                    : 'bg-card/40 border-border/30 text-foreground/60 hover:border-border/60 hover:text-foreground/80'
+                }`}
+              >
+                <Wrench size={16} />
+                Fine-tuning
+              </button>
+            </div>
           </div>
 
           {/* Research Agent (finetune only) */}
@@ -243,7 +265,7 @@ function NewJobContent() {
 
           {/* Job Name */}
           <div>
-            <label className="block text-xs font-medium text-muted mb-1.5">Job Name</label>
+            <label className="block text-xs font-semibold text-foreground/70 mb-2 uppercase tracking-wider">Job Name</label>
             <input
               type="text"
               value={jobName}
@@ -257,16 +279,16 @@ function NewJobContent() {
 
           {/* Model Category */}
           <div>
-            <label className="block text-xs font-medium text-muted mb-1.5">Model Type</label>
-            <div className="flex gap-2">
+            <label className="block text-xs font-semibold text-foreground/70 mb-2 uppercase tracking-wider">Model Type</label>
+            <div className="grid grid-cols-2 gap-3">
               <button
                 type="button"
                 onClick={() => setCategory('object_mask')}
                 disabled={submitting}
-                className={`flex-1 py-2.5 px-3 rounded-xl text-sm font-medium border transition-all cursor-pointer ${
+                className={`py-3 px-4 rounded-xl text-sm font-semibold border-2 transition-all cursor-pointer ${
                   category === 'object_mask'
-                    ? 'bg-primary text-primary-foreground border-primary'
-                    : 'bg-card border-border text-muted hover:border-primary/50'
+                    ? 'bg-gradient-to-br from-success/15 to-success/5 border-success/40 text-success shadow-sm shadow-success/10'
+                    : 'bg-card/40 border-border/30 text-foreground/60 hover:border-border/60'
                 }`}
               >
                 Object Mask
@@ -275,10 +297,10 @@ function NewJobContent() {
                 type="button"
                 onClick={() => setCategory('edge_mask')}
                 disabled={submitting}
-                className={`flex-1 py-2.5 px-3 rounded-xl text-sm font-medium border transition-all cursor-pointer ${
+                className={`py-3 px-4 rounded-xl text-sm font-semibold border-2 transition-all cursor-pointer ${
                   category === 'edge_mask'
-                    ? 'bg-primary text-primary-foreground border-primary'
-                    : 'bg-card border-border text-muted hover:border-primary/50'
+                    ? 'bg-gradient-to-br from-accent/15 to-accent/5 border-accent/40 text-accent shadow-sm shadow-accent/10'
+                    : 'bg-card/40 border-border/30 text-foreground/60 hover:border-border/60'
                 }`}
               >
                 Edge Mask
@@ -288,7 +310,7 @@ function NewJobContent() {
 
           {/* Model Selection */}
           <div>
-            <label className="block text-xs font-medium text-muted mb-1.5">Model</label>
+            <label className="block text-xs font-semibold text-foreground/70 mb-2 uppercase tracking-wider">Model</label>
             <select
               value={selectedModel}
               onChange={(e) => setSelectedModel(e.target.value)}
@@ -319,7 +341,7 @@ function NewJobContent() {
 
           {/* Images Upload */}
           <div>
-            <label className="block text-xs font-medium text-muted mb-1.5">Images (ZIP)</label>
+            <label className="block text-xs font-semibold text-foreground/70 mb-2 uppercase tracking-wider">Images (ZIP)</label>
             <div
               onClick={() => !submitting && imagesRef.current?.click()}
               onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); }}
@@ -343,7 +365,7 @@ function NewJobContent() {
           {/* Masks Upload (finetune only) */}
           {jobType === 'finetune' && (
           <div>
-            <label className="block text-xs font-medium text-muted mb-1.5">Masks (ZIP)</label>
+            <label className="block text-xs font-semibold text-foreground/70 mb-2 uppercase tracking-wider">Masks (ZIP)</label>
             <div
               onClick={() => !submitting && masksRef.current?.click()}
               onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); }}
