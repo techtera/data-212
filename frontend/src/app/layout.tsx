@@ -19,9 +19,12 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             position="bottom-right"
             toastOptions={{
               style: {
-                background: 'oklch(0.2 0.01 260)',
-                border: '1px solid oklch(0.3 0.02 260)',
-                color: 'oklch(0.95 0.01 260)',
+                background: 'oklch(0.18 0.008 260)',
+                border: '1px solid oklch(0.26 0.01 260)',
+                color: 'oklch(0.93 0.005 260)',
+                borderRadius: '14px',
+                fontSize: '13px',
+                padding: '12px 16px',
               },
             }}
           />

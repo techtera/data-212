@@ -30,11 +30,9 @@ function DashboardContent() {
     fetchJobs();
   }, [fetchJobs]);
 
-  // Auto-refresh every 5 seconds if there are running jobs
   useEffect(() => {
     const hasRunning = jobs.some((j) => j.status === 'running' || j.status === 'uploading');
     if (!hasRunning) return;
-
     const interval = setInterval(fetchJobs, 5000);
     return () => clearInterval(interval);
   }, [jobs, fetchJobs]);
@@ -42,30 +40,35 @@ function DashboardContent() {
   return (
     <div className="min-h-screen">
       <Navbar />
-      <main className="max-w-4xl mx-auto px-4 py-8">
-        <div className="flex items-center justify-between mb-6">
-          <h1 className="text-xl font-semibold">Your Jobs</h1>
+      <main className="px-8 py-10 max-w-[1400px] mx-auto">
+        <div className="flex items-center justify-between mb-8">
+          <div>
+            <h1 className="text-2xl font-semibold tracking-tight">Your Jobs</h1>
+            <p className="text-sm text-muted mt-0.5">{jobs.length} total</p>
+          </div>
           <Link
             href="/new-job"
-            className="flex items-center gap-2 px-4 py-2 rounded-md bg-primary text-primary-foreground font-medium hover:opacity-90 transition-opacity text-sm"
+            className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-primary text-primary-foreground text-sm font-medium hover:brightness-110 transition-all shadow-sm shadow-primary/20"
           >
-            <Plus size={16} />
+            <Plus size={15} />
             New Job
           </Link>
         </div>
 
         {loading ? (
-          <div className="flex justify-center py-12">
-            <div className="animate-spin rounded-full h-8 w-8 border-2 border-primary border-t-transparent" />
+          <div className="flex justify-center py-20">
+            <div className="animate-spin rounded-full h-7 w-7 border-2 border-primary border-t-transparent" />
           </div>
         ) : jobs.length === 0 ? (
-          <div className="text-center py-16 text-muted">
-            <Inbox size={48} className="mx-auto mb-4 opacity-50" />
-            <p className="text-lg">No jobs yet</p>
-            <p className="text-sm mt-1">Create your first evaluation or fine-tuning job</p>
+          <div className="text-center py-24 text-muted">
+            <div className="w-16 h-16 rounded-2xl bg-card/60 flex items-center justify-center mx-auto mb-4">
+              <Inbox size={28} className="opacity-40" />
+            </div>
+            <p className="text-base font-medium">No jobs yet</p>
+            <p className="text-sm mt-1 text-muted/70">Create your first inference or fine-tuning job to get started</p>
           </div>
         ) : (
-          <div className="grid gap-3">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {jobs
               .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
               .map((job) => (

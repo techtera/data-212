@@ -109,7 +109,7 @@ function JobDetailContent() {
   return (
     <div className="min-h-screen">
       <Navbar />
-      <main className="max-w-2xl mx-auto px-4 py-8">
+      <main className="max-w-4xl mx-auto px-8 py-10">
         <Link href="/" className="inline-flex items-center gap-1 text-sm text-muted hover:text-foreground mb-6 transition-colors">
           <ArrowLeft size={14} />
           Back to Dashboard
@@ -143,7 +143,7 @@ function JobDetailContent() {
 
             {/* Running state — pipeline steps */}
             {(job.status === 'running' || job.status === 'uploading') && (
-              <div className="border border-border rounded-lg p-5 bg-card">
+              <div className="border border-border/40 rounded-2xl p-5 bg-card/40">
                 <div className="flex items-center gap-2 mb-4">
                   <Loader2 size={18} className="text-primary animate-spin" />
                   <p className="text-foreground font-medium">Processing pipeline</p>
@@ -176,7 +176,7 @@ function JobDetailContent() {
 
             {/* Error state */}
             {job.status === 'error' && (
-              <div className="border border-destructive/30 rounded-lg p-4 bg-destructive/10">
+              <div className="border border-destructive/20 rounded-2xl p-4 bg-destructive/5">
                 <p className="text-destructive font-medium">Job failed</p>
                 <p className="text-sm text-destructive/80 mt-1">
                   {job.error_message || 'An unexpected error occurred. Please try again.'}
@@ -196,9 +196,9 @@ function JobDetailContent() {
                       <ImageIcon size={16} className="text-primary" />
                       <h3 className="text-sm font-medium">Prediction Images ({results.prediction_urls.length})</h3>
                     </div>
-                    <div className="grid grid-cols-2 gap-2">
+                    <div className="grid grid-cols-2 lg:grid-cols-3 gap-3">
                       {results.prediction_urls.map((url, i) => (
-                        <a key={i} href={url} target="_blank" rel="noopener noreferrer" className="block border border-border rounded-md overflow-hidden hover:border-primary/50 transition-colors">
+                        <a key={i} href={url} target="_blank" rel="noopener noreferrer" className="block border border-border/30 rounded-xl overflow-hidden hover:border-primary/40 hover:shadow-md hover:shadow-primary/5 transition-all">
                           <img src={url} alt={`Prediction ${i + 1}`} className="w-full h-40 object-cover" loading="lazy" />
                         </a>
                       ))}
@@ -215,7 +215,7 @@ function JobDetailContent() {
 
                 {/* Training metrics */}
                 {results?.artifacts && (
-                  <div className="border border-border rounded-lg p-4 bg-card">
+                  <div className="border border-border/40 rounded-2xl p-4 bg-card/40">
                     <h3 className="text-sm font-medium mb-3">Training Summary</h3>
                     <div className="grid grid-cols-2 gap-3 text-sm mb-3">
                       {results.artifacts.epochs_trained ? (
@@ -239,7 +239,7 @@ function JobDetailContent() {
                       return (
                         <div className="mb-3">
                           <h4 className="text-xs font-medium text-muted mb-2 uppercase">Train Metrics</h4>
-                          <div className="grid grid-cols-2 gap-2 text-sm">
+                          <div className="grid grid-cols-2 lg:grid-cols-3 gap-3 text-sm">
                             {Object.entries(tm).map(([k, v]) => (
                               <div key={k}>
                                 <span className="text-muted">{k.replace(/_/g, ' ')}:</span>{' '}
@@ -258,7 +258,7 @@ function JobDetailContent() {
                       return (
                         <div>
                           <h4 className="text-xs font-medium text-muted mb-2 uppercase">Val Metrics</h4>
-                          <div className="grid grid-cols-2 gap-2 text-sm">
+                          <div className="grid grid-cols-2 lg:grid-cols-3 gap-3 text-sm">
                             {Object.entries(vm).map(([k, v]) => (
                               <div key={k}>
                                 <span className="text-muted">{k.replace(/_/g, ' ')}:</span>{' '}
@@ -284,14 +284,14 @@ function JobDetailContent() {
                 <div className="flex gap-3">
                   <button
                     onClick={() => handleDownload('checkpoint')}
-                    className="flex items-center gap-2 px-4 py-2.5 rounded-md bg-primary text-primary-foreground font-medium hover:opacity-90 transition-opacity cursor-pointer"
+                    className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-primary text-primary-foreground text-sm font-medium hover:brightness-110 transition-all cursor-pointer shadow-sm shadow-primary/20"
                   >
                     <Download size={16} />
                     Download Checkpoint
                   </button>
                   <button
                     onClick={() => handleDownload('script')}
-                    className="flex items-center gap-2 px-4 py-2.5 rounded-md border border-border text-foreground font-medium hover:bg-card transition-colors cursor-pointer"
+                    className="flex items-center gap-2 px-5 py-2.5 rounded-xl border border-border/50 text-foreground text-sm font-medium hover:bg-card/60 transition-all cursor-pointer"
                   >
                     <Download size={16} />
                     Download Inference Script
@@ -305,9 +305,9 @@ function JobDetailContent() {
                       <ImageIcon size={16} className="text-primary" />
                       <h3 className="text-sm font-medium">Validation Predictions ({results.prediction_urls.length})</h3>
                     </div>
-                    <div className="grid grid-cols-2 gap-2">
+                    <div className="grid grid-cols-2 lg:grid-cols-3 gap-3">
                       {results.prediction_urls.map((url, i) => (
-                        <a key={i} href={url} target="_blank" rel="noopener noreferrer" className="block border border-border rounded-md overflow-hidden hover:border-primary/50 transition-colors">
+                        <a key={i} href={url} target="_blank" rel="noopener noreferrer" className="block border border-border/30 rounded-xl overflow-hidden hover:border-primary/40 hover:shadow-md hover:shadow-primary/5 transition-all">
                           <img src={url} alt={`Val Prediction ${i + 1}`} className="w-full h-40 object-cover" loading="lazy" />
                         </a>
                       ))}
