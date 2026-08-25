@@ -1,0 +1,232 @@
+[
+  {
+    "model_name": "YOLO11L-MASKING-MODEL",
+    "category": "object_mask",
+    "architecture": "YOLOv11 Large - Instance Segmentation",
+    "backbone": {
+      "type": "CSPDarknet",
+      "variant": "Large",
+      "input_shape": [640, 640, 3],
+      "stages": [
+        {"name": "P1", "channels": 64, "blocks": 1, "stride": 2},
+        {"name": "P2", "channels": 128, "blocks": 2, "stride": 2},
+        {"name": "P3", "channels": 256, "blocks": 3, "stride": 2},
+        {"name": "P4", "channels": 512, "blocks": 3, "stride": 2},
+        {"name": "P5", "channels": 512, "blocks": 1, "stride": 2}
+      ],
+      "feature_pyramid": "PANet (Path Aggregation Network)"
+    },
+    "neck": {
+      "type": "SPPF + C2f blocks",
+      "multi_scale_fusion": true
+    },
+    "head": {
+      "detection": {"type": "Decoupled head", "anchors": "anchor-free", "outputs": ["bbox", "class", "mask_coefficients"]},
+      "segmentation": {"type": "Proto-mask network", "mask_resolution": 160, "num_prototypes": 32}
+    },
+    "loss_functions": {
+      "box": "CIoU Loss",
+      "cls": "BCE with Logits",
+      "dfl": "Distribution Focal Loss",
+      "seg": "BCE for mask coefficients"
+    },
+    "training_params": {
+      "optimizer": "AdamW",
+      "lr": 0.0001,
+      "epochs": 60,
+      "batch_size": 16,
+      "patience": 20,
+      "augmentation": "Mosaic, MixUp, Copy-Paste, HSV, Flip, Scale, Translate"
+    },
+    "total_params_approx": "25.3M",
+    "inference_speed": "~45ms per image (A100)",
+    "strengths": ["Fast inference", "Multi-object detection", "Instance-level masks", "Handles varying object sizes"],
+    "weaknesses": ["Less precise boundaries", "Struggles with heavily overlapping objects", "Requires polygon annotations for training"]
+  },
+  {
+    "model_name": "VGGT-SEGFORMER",
+    "category": "object_mask",
+    "architecture": "Vision Geometry Grounded Transformer + SegFormer Decoder",
+    "backbone": {
+      "type": "DinoVisionTransformer (ViT-Large)",
+      "variant": "dinov2_vitl14_reg",
+      "input_shape": [518, 518, 3],
+      "patch_size": 14,
+      "embed_dim": 1024,
+      "depth": 24,
+      "num_heads": 16,
+      "mlp_ratio": 4.0,
+      "num_register_tokens": 4,
+      "positional_encoding": "RoPE 2D (Rotary Position Embedding)",
+      "attention": "Scaled Dot Product with QK Normalization"
+    },
+    "aggregator": {
+      "type": "Frame + Global Alternating Attention",
+      "frame_blocks": 24,
+      "global_blocks": 24,
+      "cached_layer_indices": [4, 11, 17, 23],
+      "block_size": 1,
+      "attention_order": ["frame", "global"]
+    },
+    "decoder": {
+      "type": "DPT Head + SegFormer Decoder",
+      "dpt_head": {
+        "intermediate_layers": [4, 11, 17, 23],
+        "out_channels": [256, 512, 1024, 1024],
+        "resize_layers": ["ConvTranspose4x", "ConvTranspose2x", "Identity", "Conv3x3_stride2"]
+      },
+      "segformer_decoder": {
+        "mlp_layers": 4,
+        "embedding_dim": 256,
+        "fusion": "Conv1x1 + BN + ReLU",
+        "final_conv": "Conv1x1 -> num_classes"
+      }
+    },
+    "head": {
+      "num_classes": 2,
+      "output": "Per-pixel class logits",
+      "upsampling": "Bilinear interpolation to input size"
+    },
+    "loss_functions": {
+      "ce": "Cross-Entropy Loss (weight 1.0)",
+      "dice": "Dice Loss (weight 1.0)"
+    },
+    "training_params": {
+      "optimizer": "AdamW",
+      "lr": 0.0001,
+      "weight_decay": 0.01,
+      "scheduler": "Cosine with warmup (5%)",
+      "epochs": 100,
+      "patience": 15,
+      "encoder_frozen": true,
+      "gradient_checkpointing": true
+    },
+    "total_params_approx": "340M (encoder frozen: ~18M trainable)",
+    "inference_speed": "~130ms per image (A100)",
+    "strengths": ["Global context via transformer", "Fine-grained boundaries", "Multi-scale features", "Pre-trained on massive visual data"],
+    "weaknesses": ["Large model (4.5GB checkpoint)", "Slower inference", "High VRAM requirement", "Requires polygon annotations"]
+  },
+  {
+    "model_name": "UNETPLUSPLUS-MODEL",
+    "category": "edge_mask",
+    "architecture": "UNet++ with EfficientNet-B3 Encoder + SCSE Attention",
+    "backbone": {
+      "type": "EfficientNet-B3 (pre-trained ImageNet)",
+      "input_shape": [512, 512, 3],
+      "compound_scaling": {"width": 1.2, "depth": 1.4, "resolution": 300},
+      "blocks": [
+        {"stage": 1, "channels": 40, "layers": 2, "kernel": 3},
+        {"stage": 2, "channels": 48, "layers": 3, "kernel": 5},
+        {"stage": 3, "channels": 96, "layers": 3, "kernel": 3},
+        {"stage": 4, "channels": 136, "layers": 5, "kernel": 5},
+        {"stage": 5, "channels": 232, "layers": 5, "kernel": 5},
+        {"stage": 6, "channels": 384, "layers": 2, "kernel": 3}
+      ]
+    },
+    "decoder": {
+      "type": "UNet++ (Nested UNet)",
+      "skip_connections": "Dense nested skip pathways",
+      "attention": "SCSE (Spatial + Channel Squeeze-Excitation)",
+      "upsampling": "Bilinear interpolation + Conv",
+      "decoder_channels": [256, 128, 64, 32, 16]
+    },
+    "head": {
+      "output_channels": 1,
+      "activation": "None (sigmoid applied post-inference)",
+      "threshold": 0.5
+    },
+    "post_processing": {
+      "skeletonization": true,
+      "skeleton_thickness_px": 1,
+      "dilation_after_skeleton": true
+    },
+    "loss_functions": {
+      "bce": "Weighted Binary Cross-Entropy (pos_weight clamped 1-25)",
+      "dice": "1 - Dice coefficient",
+      "combined": "BCE + Dice (equal weight)"
+    },
+    "training_params": {
+      "optimizer": "AdamW",
+      "lr_encoder": 0.00001,
+      "lr_decoder": 0.00005,
+      "weight_decay": 0.0001,
+      "scheduler": "Cosine with 2-epoch warmup",
+      "epochs": 40,
+      "patience": 8,
+      "amp": true,
+      "grad_clip": 1.0
+    },
+    "total_params_approx": "12.4M",
+    "inference_speed": "~35ms per image (A100)",
+    "strengths": ["Precise edge localization", "Lightweight and fast", "Good with thin structures", "Skeletonization for clean edges"],
+    "weaknesses": ["Binary output only (no multi-class)", "Struggles with thick filled regions", "Limited receptive field for large objects"]
+  },
+  {
+    "model_name": "VGGT-UNETPP",
+    "category": "edge_mask",
+    "architecture": "Vision Geometry Grounded Transformer + UNet++ Decoder + Edge Refinement",
+    "backbone": {
+      "type": "DinoVisionTransformer (ViT-Large) via Aggregator",
+      "variant": "dinov2_vitl14_reg",
+      "input_shape": [518, 518, 3],
+      "patch_size": 14,
+      "embed_dim": 1024,
+      "depth": 24,
+      "num_heads": 16,
+      "cached_layer_indices": [4, 11, 17, 23],
+      "feature_dim": 2048
+    },
+    "feature_extractor": {
+      "type": "VGGTFeatureExtractor",
+      "projections": [
+        {"input_dim": 2048, "output_dim": 64, "target_size": [148, 148]},
+        {"input_dim": 2048, "output_dim": 128, "target_size": [74, 74]},
+        {"input_dim": 2048, "output_dim": 256, "target_size": [37, 37]},
+        {"input_dim": 2048, "output_dim": 512, "target_size": [19, 19], "downsample": true}
+      ]
+    },
+    "decoder": {
+      "type": "UNetPPDecoder",
+      "channels": [64, 128, 256, 512],
+      "depth": 4,
+      "conv_blocks": "Conv3x3 + BN + ReLU (x2 per node)",
+      "skip_connections": "Dense nested",
+      "deep_supervision": {
+        "ds1": {"weight": 0.1, "from_layer": "x_0_1"},
+        "ds2": {"weight": 0.2, "from_layer": "x_0_2"},
+        "final": {"weight": 1.0, "from_layer": "x_0_3"}
+      }
+    },
+    "refinement": {
+      "type": "EdgeRefinement",
+      "channels": 64,
+      "layers": ["Conv3x3 + BN + ReLU", "Conv3x3 + BN + ReLU", "Residual connection"]
+    },
+    "head": {
+      "output_channels": 1,
+      "activation": "Sigmoid",
+      "threshold": 0.5,
+      "output_size": [518, 518]
+    },
+    "loss_functions": {
+      "bce": "Weighted BCE (pos_weight clamped 5-25)",
+      "dice": "1 - Dice",
+      "combined": "0.5*BCE + 0.5*Dice",
+      "deep_supervision": "Weighted sum of ds1 + ds2 + final"
+    },
+    "training_params": {
+      "optimizer": "AdamW",
+      "lr": 0.0003,
+      "weight_decay": 0.01,
+      "scheduler": "Cosine with 5% warmup",
+      "epochs": 100,
+      "patience": 15,
+      "encoder_frozen": true,
+      "gradient_checkpointing": true
+    },
+    "total_params_approx": "345M (encoder frozen: ~22M trainable)",
+    "inference_speed": "~140ms per image (A100)",
+    "strengths": ["Global context for edge continuity", "Multi-scale features", "Deep supervision prevents vanishing gradients", "Edge refinement module"],
+    "weaknesses": ["Large model (3.6GB checkpoint)", "Slower than UNet++", "High VRAM", "Binary edge output only"]
+  }
+]

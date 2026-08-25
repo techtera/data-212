@@ -71,9 +71,7 @@ export function getModelViz(token: string, modelName: string) {
 
 // Research Agent
 export interface ResearchResult {
-  recommendation: string;
-  suggested_model: string;
-  reasoning: string;
+  report: string;
 }
 
 export function runResearch(token: string, prompt: string) {

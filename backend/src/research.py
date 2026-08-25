@@ -1,7 +1,9 @@
-"""Research agent — uses Gemini API with grounded search to suggest best model."""
+"""Research agent — uses Gemini API with grounded search to suggest best model and generate detailed reports."""
 
+import asyncio
 import json
 import logging
+from pathlib import Path
 from uuid import UUID
 
 import httpx
@@ -10,40 +12,19 @@ from pydantic import BaseModel, Field
 
 from .auth import require_auth
 from .config import settings
-from .db import execute, fetch_one
 from .models import _load_models
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/research", tags=["research"])
 
-MODELS_CONTEXT = """
-Available models for segmentation tasks:
+ARCH_FILE = Path(__file__).resolve().parent.parent / "architecture.json"
 
-1. YOLO11L-MASKING-MODEL (Object Mask)
-   - Architecture: YOLOv11 Large with instance segmentation head
-   - Best for: Detecting and segmenting discrete objects (parts, weld pieces, products)
-   - Input: RGB images, outputs colored mask overlays per detected object
-   - Strengths: Fast inference, good at multiple objects, handles varying sizes
 
-2. VGGT-SEGFORMER (Object Mask)
-   - Architecture: Vision Geometry Grounded Transformer (ViT-Large) + SegFormer decoder
-   - Best for: Semantic segmentation of complex scenes, large objects, fine boundaries
-   - Input: RGB images, outputs red mask overlay on object regions
-   - Strengths: High accuracy on complex geometries, transformer-based global context
-
-3. UNETPLUSPLUS-MODEL (Edge Mask)
-   - Architecture: UNet++ with EfficientNet-B3 encoder + SCSE attention
-   - Best for: Edge detection, boundary tracing, weld seam detection, contour extraction
-   - Input: RGB images, outputs thin green edge skeleton overlay
-   - Strengths: Precise edge localization, skeletonization post-processing
-
-4. VGGT-UNETPP (Edge Mask)
-   - Architecture: Vision Geometry Grounded Transformer (ViT-Large) + UNet++ decoder + Edge Refinement
-   - Best for: High-precision edge detection on complex industrial parts
-   - Input: RGB images, outputs green edge overlay
-   - Strengths: Transformer backbone captures global context for better edge continuity
-"""
+def _load_architecture() -> str:
+    with open(ARCH_FILE, "r") as f:
+        arch = json.load(f)
+    return json.dumps(arch, indent=2)
 
 
 class ResearchRequest(BaseModel):
@@ -51,47 +32,38 @@ class ResearchRequest(BaseModel):
 
 
 class ResearchResponse(BaseModel):
-    recommendation: str
-    suggested_model: str
-    reasoning: str
+    report: str
 
 
 @router.post("", response_model=ResearchResponse)
 async def run_research(body: ResearchRequest, user_id: UUID = Depends(require_auth)):
-    """Run research agent to suggest best model for user's task."""
+    """Run research agent to suggest best model and generate detailed architecture report."""
     if not settings.GEMINI_API_KEY:
         raise HTTPException(status_code=503, detail="Research agent not configured (missing GEMINI_API_KEY)")
 
-    system_prompt = f"""You are a machine learning architecture advisor for an industrial image segmentation platform.
+    arch_context = _load_architecture()
 
-{MODELS_CONTEXT}
+    if not settings.RESEARCH_SYSTEM_PROMPT:
+        raise HTTPException(status_code=503, detail="Research agent not configured (missing RESEARCH_SYSTEM_PROMPT)")
 
-The user will describe their task, data, and requirements. Based on this:
-1. Recommend the BEST model from the 4 available options above
-2. Explain WHY this model is the best fit (2-3 sentences)
-3. Mention what results they can expect
-
-IMPORTANT: You MUST respond in this exact JSON format:
-{{"suggested_model": "<exact model name from the list>", "reasoning": "<why this model is best>", "recommendation": "<full recommendation with tips>"}}
-
-The model name must be exactly one of: YOLO11L-MASKING-MODEL, VGGT-SEGFORMER, UNETPLUSPLUS-MODEL, VGGT-UNETPP"""
+    raw_prompt = settings.RESEARCH_SYSTEM_PROMPT.replace("\\n", "\n")
+    system_prompt = raw_prompt.replace("{arch_context}", arch_context)
 
     user_prompt = f"My task: {body.prompt}"
 
     try:
-        async with httpx.AsyncClient(timeout=30) as client:
+        async with httpx.AsyncClient(timeout=180) as client:
             response = None
             for attempt in range(3):
                 response = await client.post(
                     f"https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent?key={settings.GEMINI_API_KEY}",
                     json={
                         "contents": [{"parts": [{"text": f"{system_prompt}\n\n{user_prompt}"}]}],
-                        "generationConfig": {"temperature": 0.3, "maxOutputTokens": 1024},
+                        "generationConfig": {"temperature": 0.4, "maxOutputTokens": 16384},
                         "tools": [{"google_search": {}}],
                     },
                 )
                 if response.status_code == 429:
-                    import asyncio
                     await asyncio.sleep(5)
                     continue
                 break
@@ -107,39 +79,10 @@ The model name must be exactly one of: YOLO11L-MASKING-MODEL, VGGT-SEGFORMER, UN
                 if "text" in part:
                     text += part["text"]
 
-        try:
-            text_clean = text.strip()
-            if "```" in text_clean:
-                text_clean = text_clean.split("```")[1]
-                if text_clean.startswith("json"):
-                    text_clean = text_clean[4:]
-                text_clean = text_clean.strip()
-            if "{" in text_clean:
-                json_start = text_clean.index("{")
-                json_end = text_clean.rindex("}") + 1
-                text_clean = text_clean[json_start:json_end]
-            result = json.loads(text_clean)
-        except (json.JSONDecodeError, ValueError):
-            clean_text = text.replace("```json", "").replace("```", "").strip()
-            result = {
-                "suggested_model": "YOLO11L-MASKING-MODEL",
-                "reasoning": clean_text[:500],
-                "recommendation": clean_text[:500],
-            }
-            for model_name in ["VGGT-SEGFORMER", "VGGT-UNETPP", "UNETPLUSPLUS-MODEL", "YOLO11L-MASKING-MODEL"]:
-                if model_name in text:
-                    result["suggested_model"] = model_name
-                    break
+        if not text.strip():
+            raise HTTPException(status_code=502, detail="Research agent returned empty response")
 
-        valid_models = [m["model_name"] for m in _load_models()]
-        if result.get("suggested_model") not in valid_models:
-            result["suggested_model"] = valid_models[0]
-
-        return ResearchResponse(
-            recommendation=result.get("recommendation", result.get("reasoning", "")),
-            suggested_model=result["suggested_model"],
-            reasoning=result.get("reasoning", ""),
-        )
+        return ResearchResponse(report=text.strip())
 
     except httpx.TimeoutException:
         raise HTTPException(status_code=504, detail="Research agent timed out")

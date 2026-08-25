@@ -235,27 +235,29 @@ function NewJobContent() {
                   </div>
 
                   {researchResult && (
-                    <div className="mx-4 mb-4 p-3.5 rounded-xl bg-success/5 border border-success/20">
-                      <div className="flex items-start justify-between gap-3">
-                        <div className="flex-1 min-w-0">
-                          <p className="text-[11px] font-medium text-success/80 uppercase tracking-wide mb-0.5">Recommended</p>
-                          <p className="text-sm font-semibold text-foreground truncate">{researchResult.suggested_model}</p>
+                    <div className="mx-4 mb-4">
+                      <div className="rounded-xl border border-primary/20 bg-gradient-to-b from-card/60 to-card/30 overflow-hidden">
+                        <div className="px-4 py-3 border-b border-border/30 flex items-center justify-between bg-primary/5">
+                          <span className="text-sm font-bold text-foreground">Research Report</span>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const report = researchResult.report
+                                .replace(/\$([^$]+)\$/g, (_, m) => m.replace(/\\times/g, 'x').replace(/\\text\{([^}]+)\}/g, '$1').replace(/\\/g, ''))
+                                .replace(/\\times/g, 'x');
+                              const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Research Report - TERAFAC</title><style>@page{margin:2cm}body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;max-width:780px;margin:0 auto;padding:40px 20px;line-height:1.75;color:#1a1a2e;font-size:14px}h1{font-size:22px;color:#0f0f1a;border-bottom:2px solid #e8e8f0;padding-bottom:10px;margin-top:36px}h2{font-size:18px;color:#1a1a3e;margin-top:28px;padding-bottom:6px;border-bottom:1px solid #f0f0f5}h3{font-size:15px;color:#2a2a4e;margin-top:20px}p{margin:8px 0}ul,ol{margin:8px 0;padding-left:24px}li{margin:4px 0}table{border-collapse:collapse;width:100%;margin:16px 0;font-size:13px}th{background:#f8f8fc;font-weight:600;text-align:left;padding:10px 12px;border:1px solid #e0e0e8}td{padding:8px 12px;border:1px solid #e8e8f0}tr:nth-child(even){background:#fafafc}code{background:#f5f5fa;padding:2px 6px;border-radius:4px;font-size:12px;font-family:'SF Mono',Menlo,monospace}pre{background:#f5f5fa;padding:16px;border-radius:8px;overflow-x:auto;font-size:12px;border:1px solid #e8e8f0;white-space:pre-wrap;word-wrap:break-word}blockquote{border-left:3px solid #6366f1;margin:16px 0;padding:12px 20px;background:#f8f8ff;border-radius:0 8px 8px 0}strong{color:#0f0f2a}.header{text-align:center;margin-bottom:40px;padding-bottom:20px;border-bottom:2px solid #6366f1}.header h1{border:none;font-size:26px;color:#6366f1}.header p{color:#666;font-size:13px}</style></head><body><div class="header"><h1>TERAFAC Research Report</h1><p>Generated on ${new Date().toLocaleDateString('en-US', {year:'numeric',month:'long',day:'numeric'})}</p></div>${report.replace(/^#### (.*$)/gm,'<h4>$1</h4>').replace(/^### (.*$)/gm,'<h3>$1</h3>').replace(/^## (.*$)/gm,'<h2>$1</h2>').replace(/^# (.*$)/gm,'<h1>$1</h1>').replace(/\*\*(.*?)\*\*/g,'<strong>$1</strong>').replace(/\*(.*?)\*/g,'<em>$1</em>').replace(/^- (.*$)/gm,'<li>$1</li>').replace(/(<li>.*<\/li>\n?)+/g,'<ul>$&</ul>').replace(/\`\`\`([\s\S]*?)\`\`\`/g,'<pre>$1</pre>').replace(/\`([^`]+)\`/g,'<code>$1</code>').replace(/^---$/gm,'<hr>').replace(/\n\n/g,'</p><p>').replace(/\n/g,'<br>')}</body></html>`;
+                              const w = window.open('', '_blank');
+                              if (w) { w.document.write(html); w.document.close(); }
+                            }}
+                            className="px-4 py-2 rounded-lg bg-primary text-primary-foreground text-xs font-semibold hover:brightness-110 cursor-pointer transition-all shadow-sm shadow-primary/20"
+                          >
+                            Open & Save as PDF
+                          </button>
                         </div>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setSelectedModel(researchResult.suggested_model);
-                            const m = models.find(x => x.model_name === researchResult.suggested_model);
-                            if (m) setCategory(m.category as 'object_mask' | 'edge_mask');
-                            setShowResearch(false);
-                            toast.success(`Model set to ${researchResult.suggested_model}`);
-                          }}
-                          className="shrink-0 px-3.5 py-1.5 rounded-lg bg-success text-white text-xs font-medium hover:brightness-110 cursor-pointer transition-all shadow-sm"
-                        >
-                          Use this
-                        </button>
+                        <div className="px-5 py-4 max-h-[420px] overflow-y-auto text-xs text-foreground/60 leading-relaxed italic">
+                          <p>Report generated successfully ({researchResult.report.length.toLocaleString()} characters). Click &quot;Open & Save as PDF&quot; to view the full formatted report in a new tab — use Ctrl+P / Cmd+P to save as PDF.</p>
+                        </div>
                       </div>
-                      <p className="text-xs text-muted leading-relaxed mt-2">{researchResult.reasoning}</p>
                     </div>
                   )}
                 </div>
