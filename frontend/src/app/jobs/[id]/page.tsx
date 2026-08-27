@@ -193,7 +193,7 @@ function JobDetailContent() {
                       onClick={async () => {
                         if (!token || !id) return;
                         const hint = (document.getElementById('debug-hint') as HTMLInputElement)?.value || '';
-                        toast.info('AI Agent is fixing the training code...');
+                        toast.info(job.job_type === 'eval' ? 'AI Agent is fixing the inference code...' : 'AI Agent is fixing the training code...');
                         try {
                           const res = await debugTrainingCode(token, id, job.model_name, hint);
                           toast.success(res.message);
@@ -204,7 +204,7 @@ function JobDetailContent() {
                       }}
                       className="px-4 py-2 rounded-xl bg-warning/20 text-warning text-sm font-semibold hover:bg-warning/30 cursor-pointer transition-all border border-warning/30"
                     >
-                      Fix & Retry with AI Agent
+                      {job.job_type === 'eval' ? 'Fix Inference & Retry' : 'Fix Training & Retry'}
                     </button>
                   </div>
                 )}
@@ -334,21 +334,23 @@ function JobDetailContent() {
                     {job.model_name.includes('_agent_') ? 'View Training Code' : 'View Inference Script'}
                   </button>
                   {job.model_name.includes('_agent_') && job.name && (
-                    <button
-                      onClick={async () => {
-                        if (!token || !job.name) return;
-                        try {
-                          const res = await getAgentReport(token, job.name);
-                          window.open(res.url, '_blank');
-                        } catch {
-                          toast.error('Report not available');
-                        }
-                      }}
-                      className="flex items-center gap-2 px-5 py-2.5 rounded-xl border border-primary/30 text-primary text-sm font-medium hover:bg-primary/10 transition-all cursor-pointer"
-                    >
-                      <Download size={16} />
-                      Download Report
-                    </button>
+                    <>
+                      <button
+                        onClick={async () => {
+                          if (!token || !job.name) return;
+                          try {
+                            const res = await getAgentReport(token, job.name);
+                            window.open(res.url, '_blank');
+                          } catch {
+                            toast.error('Report not available');
+                          }
+                        }}
+                        className="flex items-center gap-2 px-5 py-2.5 rounded-xl border border-primary/30 text-primary text-sm font-medium hover:bg-primary/10 transition-all cursor-pointer"
+                      >
+                        <Download size={16} />
+                        Download Report
+                      </button>
+                    </>
                   )}
                 </div>
 

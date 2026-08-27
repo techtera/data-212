@@ -88,7 +88,7 @@ export interface GenerateCodeResult {
 }
 
 export function generateTrainingCode(token: string, report: string, jobName: string, maskType: string = 'edge') {
-  return request<GenerateCodeResult>('/research/generate-code', {
+  return request<GenerateCodeResult>('/coding/generate-train', {
     method: 'POST',
     body: JSON.stringify({ report, job_name: jobName, mask_type: maskType }),
   }, token);
@@ -99,9 +99,16 @@ export function getAgentReport(token: string, jobName: string) {
 }
 
 export function debugTrainingCode(token: string, jobId: string, modelName: string, userMessage: string = '') {
-  return request<{ message: string }>('/research/debug-code', {
+  return request<{ message: string }>('/coding/debug', {
     method: 'POST',
     body: JSON.stringify({ job_id: jobId, model_name: modelName, user_message: userMessage }),
+  }, token);
+}
+
+export function generateInferenceCode(token: string, jobId: string, modelName: string) {
+  return request<{ message: string; script_path: string }>('/coding/generate-inference', {
+    method: 'POST',
+    body: JSON.stringify({ job_id: jobId, model_name: modelName }),
   }, token);
 }
 

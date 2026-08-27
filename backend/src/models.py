@@ -52,14 +52,16 @@ async def get_model_by_name_async(model_name: str, user_id: str = "") -> dict | 
         if um:
             base_model_info = get_model_by_name(um["base_model"])
             is_agent = um["base_model"] == "agent-generated"
-            script_gcs = f"gs://terafac-datasets/{um['inference_script']}" if um["inference_script"] else ""
+            train_script_gcs = f"gs://terafac-datasets/{um['inference_script']}" if um["inference_script"] else ""
+            infer_script_gcs = train_script_gcs.replace("/train.py", "/inference.py") if train_script_gcs else ""
             return {
                 "model_name": um["model_name"],
                 "category": um["category"],
                 "load_path": f"gs://terafac-datasets/{um['checkpoint_path']}" if um["checkpoint_path"] else "",
-                "inference_script": script_gcs if is_agent else (base_model_info["inference_script"] if base_model_info else ""),
-                "finetune_script": script_gcs if is_agent else "",
-                "usr_inference_script": script_gcs,
+                "inference_script": infer_script_gcs if is_agent else (base_model_info["inference_script"] if base_model_info else ""),
+                "finetune_script": train_script_gcs if is_agent else "",
+                "usr_inference_script": infer_script_gcs if is_agent else train_script_gcs,
+                "training_script": train_script_gcs if is_agent else "",
                 "save_path": "",
                 "user_id": str(um["user_id"]),
             }

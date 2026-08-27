@@ -10,7 +10,9 @@ from .auth import require_auth
 from .db import execute, fetch_all, fetch_one
 from .gcs import mint_signed_get_url
 from .models import get_model_by_name, get_model_by_name_async
-from .training import run_eval, run_finetune, run_agent_train
+from .training import run_eval, run_finetune
+from .training_agent import run_agent_train
+from .inference_agent import run_agent_inference
 
 router = APIRouter(prefix="/jobs", tags=["jobs"])
 
@@ -240,6 +242,32 @@ async def trigger_agent_train(
     )
 
     background_tasks.add_task(run_agent_train, str(job["id"]), job["model_id"], job["name"], str(job["owner_id"]))
+
+    updated = await fetch_one("SELECT * FROM jobs WHERE id = $1", job["id"])
+    return _job_response(updated)
+
+
+@router.post("/{job_id}/run-agent-inference", response_model=JobResponse)
+async def trigger_agent_inference(
+    job_id: str,
+    background_tasks: BackgroundTasks,
+    user_id: UUID = Depends(require_auth),
+):
+    """Start agent-generated inference. Uses separate pipeline."""
+    job = await _get_owned_job(job_id, user_id)
+
+    if job["job_type"] != "eval":
+        raise HTTPException(status_code=400, detail="Job is not an eval job")
+
+    if job["status"] not in ("uploading",):
+        raise HTTPException(status_code=400, detail=f"Cannot start: status is '{job['status']}'")
+
+    await execute(
+        "UPDATE jobs SET status = 'running', updated_at = NOW() WHERE id = $1",
+        job["id"],
+    )
+
+    background_tasks.add_task(run_agent_inference, str(job["id"]), job["model_id"], job["name"], str(job["owner_id"]))
 
     updated = await fetch_one("SELECT * FROM jobs WHERE id = $1", job["id"])
     return _job_response(updated)

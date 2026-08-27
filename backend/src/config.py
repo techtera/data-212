@@ -27,7 +27,6 @@ class Settings(BaseSettings):
 
     # Gemini
     GEMINI_API_KEY: str = ""
-    RESEARCH_SYSTEM_PROMPT: str = ""
 
     model_config = {"env_file": ".env", "extra": "ignore"}
 
