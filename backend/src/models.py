@@ -51,13 +51,15 @@ async def get_model_by_name_async(model_name: str, user_id: str = "") -> dict | 
         )
         if um:
             base_model_info = get_model_by_name(um["base_model"])
+            is_agent = um["base_model"] == "agent-generated"
+            script_gcs = f"gs://terafac-datasets/{um['inference_script']}" if um["inference_script"] else ""
             return {
                 "model_name": um["model_name"],
                 "category": um["category"],
-                "load_path": f"gs://terafac-datasets/{um['checkpoint_path']}",
-                "inference_script": base_model_info["inference_script"] if base_model_info else "",
-                "finetune_script": "",
-                "usr_inference_script": f"gs://terafac-datasets/{um['inference_script']}" if um["inference_script"] else "",
+                "load_path": f"gs://terafac-datasets/{um['checkpoint_path']}" if um["checkpoint_path"] else "",
+                "inference_script": script_gcs if is_agent else (base_model_info["inference_script"] if base_model_info else ""),
+                "finetune_script": script_gcs if is_agent else "",
+                "usr_inference_script": script_gcs,
                 "save_path": "",
                 "user_id": str(um["user_id"]),
             }
@@ -77,13 +79,15 @@ async def list_models(user_id: UUID = Depends(require_auth)):
         "SELECT * FROM user_models WHERE user_id = $1 ORDER BY created_at DESC", user_id
     )
     for um in user_models:
+        is_agent = um["base_model"] == "agent-generated"
         visible.append({
             "model_name": um["model_name"],
             "category": um["category"],
             "load_path": um["checkpoint_path"],
             "inference_script": um["inference_script"],
-            "finetune_script": "",
+            "finetune_script": f"gs://terafac-datasets/{um['inference_script']}" if is_agent else "",
             "usr_inference_script": um["inference_script"],
+            "finetune_only": is_agent,
             "save_path": "",
             "user_id": str(um["user_id"]),
         })

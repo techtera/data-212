@@ -13,12 +13,11 @@ import {
   runEval,
   runFinetune,
   getModels,
-  runResearch,
   type Model,
-  type ResearchResult,
 } from '@/lib/api';
 import { toast } from 'sonner';
 import { Upload, FlaskConical, Wrench, Search } from 'lucide-react';
+import Link from 'next/link';
 import { ModelInfoCard } from '@/components/model-info-card';
 
 function NewJobContent() {
@@ -36,10 +35,6 @@ function NewJobContent() {
   const [submitting, setSubmitting] = useState(false);
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [showModelInfo, setShowModelInfo] = useState(false);
-  const [showResearch, setShowResearch] = useState(false);
-  const [researchPrompt, setResearchPrompt] = useState('');
-  const [researching, setResearching] = useState(false);
-  const [researchResult, setResearchResult] = useState<ResearchResult | null>(null);
   const [epochs, setEpochs] = useState('');
   const [lr, setLr] = useState('');
   const imagesRef = useRef<HTMLInputElement>(null);
@@ -54,7 +49,11 @@ function NewJobContent() {
     }).catch(() => {});
   }, [token]);
 
-  const filteredModels = models.filter(m => m.category === category);
+  const filteredModels = models.filter(m => {
+    if (m.category !== category) return false;
+    if (jobType === 'eval' && (m as unknown as { finetune_only?: boolean }).finetune_only) return false;
+    return true;
+  });
 
   useEffect(() => {
     const filtered = models.filter(m => m.category === category);
@@ -174,95 +173,15 @@ function NewJobContent() {
             </div>
           </div>
 
-          {/* Research Agent (finetune only) */}
+          {/* AI Agent link */}
           {jobType === 'finetune' && (
-            <div>
-              {!showResearch ? (
-                <button
-                  type="button"
-                  onClick={() => setShowResearch(true)}
-                  className="w-full py-2.5 px-4 rounded-xl border border-dashed border-primary/30 text-sm text-primary/80 hover:text-primary hover:border-primary/60 hover:bg-primary/5 cursor-pointer transition-all flex items-center justify-center gap-2"
-                >
-                  <Search size={15} />
-                  Not sure which model to use? Ask AI
-                </button>
-              ) : (
-                <div className="rounded-2xl border border-border/60 bg-gradient-to-b from-card/80 to-card/40 backdrop-blur-sm overflow-hidden shadow-sm">
-                  <div className="px-4 py-3 flex items-center justify-between border-b border-border/40">
-                    <div className="flex items-center gap-2">
-                      <div className="w-6 h-6 rounded-full bg-primary/10 flex items-center justify-center">
-                        <Search size={12} className="text-primary" />
-                      </div>
-                      <span className="text-xs font-medium text-foreground/80">AI Model Advisor</span>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => setShowResearch(false)}
-                      className="text-xs text-muted hover:text-foreground cursor-pointer transition-colors"
-                    >
-                      Dismiss
-                    </button>
-                  </div>
-
-                  <div className="p-4 space-y-3">
-                    <textarea
-                      value={researchPrompt}
-                      onChange={(e) => setResearchPrompt(e.target.value)}
-                      disabled={researching}
-                      placeholder="Describe your images and what you want to segment...&#10;E.g.: 200 images of welded joints, need to detect weld seam boundaries"
-                      className="w-full px-3 py-2.5 rounded-xl bg-background/50 border border-border/50 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary/50 resize-none h-[68px] placeholder:text-muted/50 transition-all"
-                    />
-                    <button
-                      type="button"
-                      onClick={async () => {
-                        if (!token || !researchPrompt.trim()) return;
-                        setResearching(true);
-                        setResearchResult(null);
-                        try {
-                          const res = await runResearch(token, researchPrompt.trim());
-                          setResearchResult(res);
-                        } catch (err) {
-                          toast.error(err instanceof Error ? err.message : 'Research failed');
-                        } finally {
-                          setResearching(false);
-                        }
-                      }}
-                      disabled={researching || !researchPrompt.trim()}
-                      className="px-4 py-2 rounded-xl bg-primary text-primary-foreground text-xs font-medium hover:brightness-110 disabled:opacity-40 cursor-pointer disabled:cursor-not-allowed transition-all shadow-sm"
-                    >
-                      {researching ? 'Analyzing...' : 'Get Recommendation'}
-                    </button>
-                  </div>
-
-                  {researchResult && (
-                    <div className="mx-4 mb-4">
-                      <div className="rounded-xl border border-primary/20 bg-gradient-to-b from-card/60 to-card/30 overflow-hidden">
-                        <div className="px-4 py-3 border-b border-border/30 flex items-center justify-between bg-primary/5">
-                          <span className="text-sm font-bold text-foreground">Research Report</span>
-                          <button
-                            type="button"
-                            onClick={() => {
-                              const report = researchResult.report
-                                .replace(/\$([^$]+)\$/g, (_, m) => m.replace(/\\times/g, 'x').replace(/\\text\{([^}]+)\}/g, '$1').replace(/\\/g, ''))
-                                .replace(/\\times/g, 'x');
-                              const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Research Report - TERAFAC</title><style>@page{margin:2cm}body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;max-width:780px;margin:0 auto;padding:40px 20px;line-height:1.75;color:#1a1a2e;font-size:14px}h1{font-size:22px;color:#0f0f1a;border-bottom:2px solid #e8e8f0;padding-bottom:10px;margin-top:36px}h2{font-size:18px;color:#1a1a3e;margin-top:28px;padding-bottom:6px;border-bottom:1px solid #f0f0f5}h3{font-size:15px;color:#2a2a4e;margin-top:20px}p{margin:8px 0}ul,ol{margin:8px 0;padding-left:24px}li{margin:4px 0}table{border-collapse:collapse;width:100%;margin:16px 0;font-size:13px}th{background:#f8f8fc;font-weight:600;text-align:left;padding:10px 12px;border:1px solid #e0e0e8}td{padding:8px 12px;border:1px solid #e8e8f0}tr:nth-child(even){background:#fafafc}code{background:#f5f5fa;padding:2px 6px;border-radius:4px;font-size:12px;font-family:'SF Mono',Menlo,monospace}pre{background:#f5f5fa;padding:16px;border-radius:8px;overflow-x:auto;font-size:12px;border:1px solid #e8e8f0;white-space:pre-wrap;word-wrap:break-word}blockquote{border-left:3px solid #6366f1;margin:16px 0;padding:12px 20px;background:#f8f8ff;border-radius:0 8px 8px 0}strong{color:#0f0f2a}.header{text-align:center;margin-bottom:40px;padding-bottom:20px;border-bottom:2px solid #6366f1}.header h1{border:none;font-size:26px;color:#6366f1}.header p{color:#666;font-size:13px}</style></head><body><div class="header"><h1>TERAFAC Research Report</h1><p>Generated on ${new Date().toLocaleDateString('en-US', {year:'numeric',month:'long',day:'numeric'})}</p></div>${report.replace(/^#### (.*$)/gm,'<h4>$1</h4>').replace(/^### (.*$)/gm,'<h3>$1</h3>').replace(/^## (.*$)/gm,'<h2>$1</h2>').replace(/^# (.*$)/gm,'<h1>$1</h1>').replace(/\*\*(.*?)\*\*/g,'<strong>$1</strong>').replace(/\*(.*?)\*/g,'<em>$1</em>').replace(/^- (.*$)/gm,'<li>$1</li>').replace(/(<li>.*<\/li>\n?)+/g,'<ul>$&</ul>').replace(/\`\`\`([\s\S]*?)\`\`\`/g,'<pre>$1</pre>').replace(/\`([^`]+)\`/g,'<code>$1</code>').replace(/^---$/gm,'<hr>').replace(/\n\n/g,'</p><p>').replace(/\n/g,'<br>')}</body></html>`;
-                              const w = window.open('', '_blank');
-                              if (w) { w.document.write(html); w.document.close(); }
-                            }}
-                            className="px-4 py-2 rounded-lg bg-primary text-primary-foreground text-xs font-semibold hover:brightness-110 cursor-pointer transition-all shadow-sm shadow-primary/20"
-                          >
-                            Open & Save as PDF
-                          </button>
-                        </div>
-                        <div className="px-5 py-4 max-h-[420px] overflow-y-auto text-xs text-foreground/60 leading-relaxed italic">
-                          <p>Report generated successfully ({researchResult.report.length.toLocaleString()} characters). Click &quot;Open & Save as PDF&quot; to view the full formatted report in a new tab — use Ctrl+P / Cmd+P to save as PDF.</p>
-                        </div>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              )}
-            </div>
+            <Link
+              href="/jobs/agent-train"
+              className="w-full py-2.5 px-4 rounded-xl border border-dashed border-primary/30 text-sm text-primary/80 hover:text-primary hover:border-primary/60 hover:bg-primary/5 transition-all flex items-center justify-center gap-2"
+            >
+              <Search size={15} />
+              Want to train a new architecture? Use AI Agent
+            </Link>
           )}
 
           {/* Job Name */}

@@ -5,7 +5,7 @@ import { useParams } from 'next/navigation';
 import { useAuth } from '@/lib/auth-context';
 import { Protected } from '@/components/protected';
 import { Navbar } from '@/components/navbar';
-import { getJobs, getResults, getDownload, type Job, type JobResults } from '@/lib/api';
+import { getJobs, getResults, getDownload, debugTrainingCode, getAgentReport, type Job, type JobResults } from '@/lib/api';
 import { LossChart } from '@/components/loss-chart';
 import { toast } from 'sonner';
 import { ArrowLeft, Download, Loader2, CheckCircle2, XCircle, Clock, Image as ImageIcon } from 'lucide-react';
@@ -46,7 +46,7 @@ function JobDetailContent() {
       const found = jobs.find((j) => j.id === id);
       if (found) {
         setJob(found);
-        if (found.status === 'done' && !results) {
+        if ((found.status === 'done' || found.status === 'error') && !results) {
           try {
             const r = await getResults(token, id);
             setResults(r);
@@ -181,6 +181,33 @@ function JobDetailContent() {
                 <p className="text-sm text-destructive/80 mt-1">
                   {job.error_message || 'An unexpected error occurred. Please try again.'}
                 </p>
+                {job.model_name.includes('_agent_') && (
+                  <div className="mt-3 space-y-2">
+                    <input
+                      id="debug-hint"
+                      type="text"
+                      placeholder="Optional: hint for the AI (e.g. 'masks are _mask.png format')"
+                      className="w-full px-3 py-2 rounded-lg bg-card/60 border border-border/50 text-sm text-foreground placeholder:text-muted/50 focus:outline-none focus:ring-2 focus:ring-warning/20"
+                    />
+                    <button
+                      onClick={async () => {
+                        if (!token || !id) return;
+                        const hint = (document.getElementById('debug-hint') as HTMLInputElement)?.value || '';
+                        toast.info('AI Agent is fixing the training code...');
+                        try {
+                          const res = await debugTrainingCode(token, id, job.model_name, hint);
+                          toast.success(res.message);
+                          setTimeout(() => window.location.reload(), 2000);
+                        } catch (err) {
+                          toast.error(err instanceof Error ? err.message : 'Debug failed');
+                        }
+                      }}
+                      className="px-4 py-2 rounded-xl bg-warning/20 text-warning text-sm font-semibold hover:bg-warning/30 cursor-pointer transition-all border border-warning/30"
+                    >
+                      Fix & Retry with AI Agent
+                    </button>
+                  </div>
+                )}
               </div>
             )}
 
@@ -304,8 +331,25 @@ function JobDetailContent() {
                     className="flex items-center gap-2 px-5 py-2.5 rounded-xl border border-border/50 text-foreground text-sm font-medium hover:bg-card/60 transition-all cursor-pointer"
                   >
                     <Download size={16} />
-                    View Inference Script
+                    {job.model_name.includes('_agent_') ? 'View Training Code' : 'View Inference Script'}
                   </button>
+                  {job.model_name.includes('_agent_') && job.name && (
+                    <button
+                      onClick={async () => {
+                        if (!token || !job.name) return;
+                        try {
+                          const res = await getAgentReport(token, job.name);
+                          window.open(res.url, '_blank');
+                        } catch {
+                          toast.error('Report not available');
+                        }
+                      }}
+                      className="flex items-center gap-2 px-5 py-2.5 rounded-xl border border-primary/30 text-primary text-sm font-medium hover:bg-primary/10 transition-all cursor-pointer"
+                    >
+                      <Download size={16} />
+                      Download Report
+                    </button>
+                  )}
                 </div>
 
                 {/* Val prediction images */}

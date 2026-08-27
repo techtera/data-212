@@ -81,6 +81,30 @@ export function runResearch(token: string, prompt: string) {
   }, token);
 }
 
+export interface GenerateCodeResult {
+  model_name: string;
+  script_path: string;
+  message: string;
+}
+
+export function generateTrainingCode(token: string, report: string, jobName: string, maskType: string = 'edge') {
+  return request<GenerateCodeResult>('/research/generate-code', {
+    method: 'POST',
+    body: JSON.stringify({ report, job_name: jobName, mask_type: maskType }),
+  }, token);
+}
+
+export function getAgentReport(token: string, jobName: string) {
+  return request<{ url: string }>(`/research/report/${encodeURIComponent(jobName)}`, {}, token);
+}
+
+export function debugTrainingCode(token: string, jobId: string, modelName: string, userMessage: string = '') {
+  return request<{ message: string }>('/research/debug-code', {
+    method: 'POST',
+    body: JSON.stringify({ job_id: jobId, model_name: modelName, user_message: userMessage }),
+  }, token);
+}
+
 // Jobs
 export interface Job {
   id: string;
@@ -158,6 +182,10 @@ export function runEval(token: string, jobId: string) {
 
 export function runFinetune(token: string, jobId: string) {
   return request<{ status: string }>(`/jobs/${jobId}/run-finetune`, { method: 'POST' }, token);
+}
+
+export function runAgentTrain(token: string, jobId: string) {
+  return request<{ status: string }>(`/jobs/${jobId}/run-agent-train`, { method: 'POST' }, token);
 }
 
 // Results

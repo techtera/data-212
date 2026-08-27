@@ -47,6 +47,19 @@ async def run_finetune(job_id: str, model_name: str, job_name: str, owner_id: st
         )
 
 
+async def run_agent_train(job_id: str, model_name: str, job_name: str, owner_id: str = "") -> None:
+    """Run agent-generated training. Separate pipeline: clean VM dir, download code+data fresh, run."""
+    try:
+        await _ssh_agent_train(job_id, model_name, job_name, owner_id)
+    except Exception as e:
+        logger.exception("Agent train job %s failed", job_id)
+        await execute(
+            "UPDATE jobs SET status = 'error', error_message = $1, updated_at = NOW() WHERE id = $2",
+            str(e)[:500],
+            job_id,
+        )
+
+
 # ---------------------------------------------------------------------------
 # Stub mode (local development)
 # ---------------------------------------------------------------------------
@@ -351,11 +364,17 @@ async def _ssh_finetune(job_id: str, model_name: str, job_name: str, owner_id: s
     if not finetune_script_path:
         raise RuntimeError(f"No finetune script configured for model: {model_name}")
 
-    load_path = model_info["load_path"]
-    model_parts = load_path.replace("gs://", "").split("/", 1)
-    model_bucket = model_parts[0]
-    model_blob = model_parts[1]
-    model_filename = model_blob.split("/")[-1]
+    load_path = model_info.get("load_path", "")
+    has_pretrained = bool(load_path and load_path.startswith("gs://"))
+    if has_pretrained:
+        model_parts = load_path.replace("gs://", "").split("/", 1)
+        model_bucket = model_parts[0]
+        model_blob = model_parts[1]
+        model_filename = model_blob.split("/")[-1]
+    else:
+        model_bucket = ""
+        model_blob = ""
+        model_filename = ""
 
     script_parts = finetune_script_path.replace("gs://", "").split("/", 1)
     script_bucket = script_parts[0]
@@ -408,7 +427,8 @@ b.blob('{script_blob}').download_to_filename('$JOB_DIR/{script_filename}')
 print('Finetune script downloaded: {script_filename}')
 "
 
-# 2. Download pretrained model
+# 2. Download pretrained model (if available)
+if [ -n "{model_filename}" ]; then
 echo "Downloading pretrained model..."
 $VENV -c "
 from google.cloud import storage
@@ -417,6 +437,7 @@ b = c.bucket('{model_bucket}')
 b.blob('{model_blob}').download_to_filename('$JOB_DIR/{model_filename}')
 print('Model downloaded: {model_filename}')
 "
+fi
 
 # 3. Download images and masks
 echo "Downloading images and masks..."
@@ -443,7 +464,7 @@ rm -rf masks_raw masks.zip
 # 5. Run finetune
 echo "Running fine-tuning..."
 $VENV "$JOB_DIR/{script_filename}" \\
-    --model-path "$JOB_DIR/{model_filename}" \\
+    --model-path "{f'$JOB_DIR/{model_filename}' if has_pretrained else ''}" \\
     --images-dir "$JOB_DIR/images" \\
     --masks-dir "$JOB_DIR/masks" \\
     --output-dir "$JOB_DIR/output" \\
@@ -547,7 +568,7 @@ async def _poll_vm_finetune(job_id: str, job_dir: str, bucket: str, job_name: st
                             for f in pred_files
                         ]
 
-                    model_info = get_model_by_name(model_name)
+                    model_info = await get_model_by_name_async(model_name, owner_id)
                     inference_script_blob = ""
                     if model_info:
                         usr_script = model_info.get("usr_inference_script", "")
@@ -588,7 +609,7 @@ async def _poll_vm_finetune(job_id: str, job_dir: str, bucket: str, job_name: st
                     _ssh_exec(client, f"rm -rf {job_dir}")
 
                     # Register finetuned model for the user
-                    model_info_reg = get_model_by_name(model_name)
+                    model_info_reg = await get_model_by_name_async(model_name, owner_id)
                     category = model_info_reg.get("category", "object_mask") if model_info_reg else "object_mask"
                     usr_script = model_info_reg.get("usr_inference_script", "") if model_info_reg else ""
                     checkpoint_gcs = f"finetune/{owner_id}/{job_name}/{model_name}/best.pt"
@@ -617,3 +638,129 @@ async def _poll_vm_finetune(job_id: str, job_dir: str, bucket: str, job_name: st
         except Exception as e:
             logger.warning("Poll %d for finetune job %s failed: %s", i, job_id, e)
 
+
+
+# ---------------------------------------------------------------------------
+# Agent Training (separate pipeline)
+# ---------------------------------------------------------------------------
+
+
+async def _ssh_agent_train(job_id: str, model_name: str, job_name: str, owner_id: str = "") -> None:
+    """Run agent-generated training script. Clean pipeline: fresh dir, download code+data, run."""
+    model_info = await get_model_by_name_async(model_name, owner_id)
+    if not model_info:
+        raise RuntimeError(f"Model not found: {model_name}")
+
+    # Agent script is stored in finetune_script or inference_script
+    script_gs = model_info.get("finetune_script", "") or model_info.get("inference_script", "")
+    if not script_gs:
+        raise RuntimeError(f"No training script for agent model: {model_name}")
+
+    script_parts = script_gs.replace("gs://", "").split("/", 1)
+    script_bucket = script_parts[0]
+    script_blob = script_parts[1]
+
+    images_gcs_path = f"upload/{owner_id}/{job_name}/images.zip"
+    masks_gcs_path = f"upload/{owner_id}/{job_name}/masks.zip"
+    data_bucket = settings.GCS_BUCKET_NAME
+
+    client = _get_ssh_client()
+    job_dir = f"{VM_WORKDIR}/jobs/{job_id}"
+    screen_name = f"ag_{job_id[:8]}"
+
+    try:
+        # Clean previous attempt and start fresh
+        _ssh_exec(client, f"rm -rf {job_dir} && mkdir -p {job_dir}/logs")
+
+        job_script = f"""#!/bin/bash
+VENV="{VM_VENV}"
+JOB_DIR="{job_dir}"
+LOG="{job_dir}/logs/run.log"
+
+trap 'echo "SCRIPT FAILED at line $LINENO" >> "$LOG"; echo "ERROR" > "$JOB_DIR/status"; exit 1' ERR
+
+set -e
+exec > >(tee -a "$LOG") 2>&1
+echo "=== Agent Train Job {job_id} ==="
+
+# 1. Download training script
+echo "Downloading training script..."
+$VENV -c "
+from google.cloud import storage
+c = storage.Client()
+b = c.bucket('{script_bucket}')
+b.blob('{script_blob}').download_to_filename('$JOB_DIR/train.py')
+print('Script downloaded')
+"
+
+# 2. Download images and masks
+echo "Downloading data..."
+mkdir -p "$JOB_DIR/images" "$JOB_DIR/masks" "$JOB_DIR/output/predictions"
+$VENV -c "
+from google.cloud import storage
+c = storage.Client()
+b = c.bucket('{data_bucket}')
+b.blob('{images_gcs_path}').download_to_filename('$JOB_DIR/images.zip')
+b.blob('{masks_gcs_path}').download_to_filename('$JOB_DIR/masks.zip')
+print('Data downloaded')
+"
+
+# 3. Extract and flatten
+cd "$JOB_DIR"
+unzip -o -q images.zip -d images_raw
+find images_raw -type f \( -name "*.png" -o -name "*.jpg" -o -name "*.jpeg" \) -exec mv {{}} images/ \;
+rm -rf images_raw images.zip
+
+unzip -o -q masks.zip -d masks_raw
+find masks_raw -type f \( -name "*.png" -o -name "*.jpg" -o -name "*.txt" -o -name "*.jpeg" \) -exec mv {{}} masks/ \;
+rm -rf masks_raw masks.zip
+
+echo "Images: $(ls images/ | wc -l), Masks: $(ls masks/ | wc -l)"
+
+# 4. Run training
+echo "Running training..."
+$VENV "$JOB_DIR/train.py" \
+    --model-path "" \
+    --images-dir "$JOB_DIR/images" \
+    --masks-dir "$JOB_DIR/masks" \
+    --output-dir "$JOB_DIR/output" \
+    --job-id {job_id} \
+    --split 0.9
+
+# 5. Upload checkpoint
+echo "Uploading results..."
+$VENV -c "
+import os
+from google.cloud import storage
+c = storage.Client()
+b = c.bucket('{data_bucket}')
+if os.path.exists('$JOB_DIR/output/best.pt'):
+    b.blob('finetune/{owner_id}/{job_name}/{model_name}/best.pt').upload_from_filename('$JOB_DIR/output/best.pt')
+    print('Checkpoint uploaded')
+pred_dir = '$JOB_DIR/output/predictions'
+if os.path.isdir(pred_dir):
+    for f in os.listdir(pred_dir):
+        b.blob(f'finetune/{owner_id}/{job_name}/{model_name}/predictions/{{f}}').upload_from_filename(f'{{pred_dir}}/{{f}}')
+    print(f'Uploaded {{len(os.listdir(pred_dir))}} predictions')
+if os.path.exists('$JOB_DIR/output/metrics.json'):
+    b.blob('finetune/{owner_id}/{job_name}/{model_name}/metrics.json').upload_from_filename('$JOB_DIR/output/metrics.json')
+    print('Metrics uploaded')
+"
+
+# 6. Copy metrics for poller
+cp "$JOB_DIR/output/metrics.json" "$JOB_DIR/results.json" 2>/dev/null || echo '{{}}' > "$JOB_DIR/results.json"
+
+# 7. Done
+echo "DONE" > "$JOB_DIR/status"
+echo "=== Agent Train Complete ==="
+"""
+
+        _ssh_exec(client, f"cat > {job_dir}/run_job.sh << 'JOBEOF'\n{job_script}\nJOBEOF")
+        _ssh_exec(client, f"chmod +x {job_dir}/run_job.sh")
+        _ssh_exec(client, f"screen -dmS {screen_name} bash {job_dir}/run_job.sh")
+        logger.info("Agent train job %s launched in screen '%s'", job_id, screen_name)
+
+    finally:
+        client.close()
+
+    await _poll_vm_finetune(job_id, job_dir, data_bucket, job_name, model_name, owner_id)
