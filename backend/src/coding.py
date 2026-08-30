@@ -4,7 +4,6 @@ import asyncio
 import json
 import logging
 import re
-from pathlib import Path
 from uuid import UUID
 
 import httpx
@@ -20,11 +19,22 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/coding", tags=["coding"])
 
-# Template paths
-EDGE_TEMPLATE = Path(__file__).resolve().parent.parent.parent / "model" / "code" / "finetune_code_unetpp_finetune.py"
-OBJECT_TEMPLATE = Path(__file__).resolve().parent.parent.parent / "model" / "code" / "finetune_code_yolo_finetune.py"
-EDGE_INFERENCE_TEMPLATE = Path(__file__).resolve().parent.parent.parent / "model" / "code" / "usr_unetpp_inference.py"
-OBJECT_INFERENCE_TEMPLATE = Path(__file__).resolve().parent.parent.parent / "model" / "code" / "usr_yolo_inference.py"
+# GCS template paths
+TEMPLATE_PATHS = {
+    "edge_train": "finetune/code/unetpp_finetune.py",
+    "object_train": "finetune/code/yolo_finetune.py",
+    "edge_inference": "usr-inference-code/unetpp_inference.py",
+    "object_inference": "usr-inference-code/yolo_inference.py",
+}
+
+
+def _load_template(key: str) -> str:
+    """Load template code from GCS."""
+    bucket = _get_bucket()
+    blob = bucket.blob(TEMPLATE_PATHS[key])
+    if not blob.exists():
+        raise HTTPException(status_code=500, detail=f"Template not found on GCS: {TEMPLATE_PATHS[key]}")
+    return blob.download_as_text()
 
 # VM context shared with agent
 VM_TRAINING_CONTEXT = """
@@ -142,12 +152,9 @@ JUST the smp.XXX(...) call. Nothing else."""
 
     logger.info("Coding agent model line: %s", model_line)
 
-    # Step 2: Load template and inject model line
-    template_path = EDGE_TEMPLATE if body.mask_type == "edge" else OBJECT_TEMPLATE
-    if not template_path.exists():
-        raise HTTPException(status_code=500, detail="Training template not found")
-
-    code = template_path.read_text()
+    # Step 2: Load template from GCS and inject model line
+    template_key = "edge_train" if body.mask_type == "edge" else "object_train"
+    code = _load_template(template_key)
     code = re.sub(r'smp\.UnetPlusPlus\([^)]+\)', model_line, code, count=1)
     code = code.replace('encoder_weights=None', 'encoder_weights="imagenet"')
 
@@ -220,14 +227,13 @@ async def generate_inference_code(body: GenInferenceRequest, user_id: UUID = Dep
         raise HTTPException(status_code=404, detail="Training script not found")
     training_code = blob.download_as_text()
 
-    # Load inference template
+    # Load inference template from GCS
     category = um["category"]
-    if category == "edge_mask":
-        template_path = EDGE_INFERENCE_TEMPLATE
-    else:
-        template_path = OBJECT_INFERENCE_TEMPLATE
-
-    template_code = template_path.read_text() if template_path.exists() else ""
+    template_key = "edge_inference" if category == "edge_mask" else "object_inference"
+    try:
+        template_code = _load_template(template_key)
+    except Exception:
+        template_code = ""
 
     # Ask Gemini to generate inference code
     prompt = f"""Generate a standalone inference script for this trained model.

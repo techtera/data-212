@@ -37,6 +37,8 @@ function NewJobContent() {
   const [showModelInfo, setShowModelInfo] = useState(false);
   const [epochs, setEpochs] = useState('');
   const [lr, setLr] = useState('');
+  const [lrEncoder, setLrEncoder] = useState('');
+  const [lrDecoder, setLrDecoder] = useState('');
   const imagesRef = useRef<HTMLInputElement>(null);
   const masksRef = useRef<HTMLInputElement>(null);
 
@@ -108,6 +110,8 @@ function NewJobContent() {
             ...jobData,
             ...(epochs ? { epochs: parseInt(epochs) } : {}),
             ...(lr ? { lr: parseFloat(lr) } : {}),
+            ...(lrEncoder ? { lr_encoder: parseFloat(lrEncoder) } : {}),
+            ...(lrDecoder ? { lr_decoder: parseFloat(lrDecoder) } : {}),
           });
 
       // Step 5: Start job on VM
@@ -335,37 +339,41 @@ function NewJobContent() {
               {showAdvanced ? '▾ Hide' : '▸ Advanced Settings'}
             </button>
             {showAdvanced && (() => {
-              const defaults: Record<string, { epochs: number; lr: string }> = {
+              const isUnetpp = selectedModel === 'UNETPLUSPLUS-MODEL';
+              const defaults: Record<string, { epochs: number; lr?: string; lr_enc?: string; lr_dec?: string }> = {
                 'YOLO11L-MASKING-MODEL': { epochs: 60, lr: '0.0001' },
                 'VGGT-SEGFORMER': { epochs: 2, lr: '0.0001' },
-                'UNETPLUSPLUS-MODEL': { epochs: 40, lr: '0.00001' },
+                'UNETPLUSPLUS-MODEL': { epochs: 40, lr_enc: '0.00001', lr_dec: '0.00005' },
                 'VGGT-UNETPP': { epochs: 2, lr: '0.0003' },
               };
               const d = defaults[selectedModel] || { epochs: 10, lr: '0.0001' };
+              const inputClass = "w-full px-3 py-1.5 text-sm rounded-xl bg-card/60 border border-border/50 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary/50 text-foreground placeholder:text-foreground/50 transition-all";
               return (
-              <div className="mt-2 grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs text-muted mb-1">Epochs</label>
-                  <input
-                    type="number"
-                    value={epochs}
-                    onChange={(e) => setEpochs(e.target.value)}
-                    disabled={submitting}
-                    placeholder={String(d.epochs)}
-                    className="w-full px-3 py-1.5 text-sm rounded-md bg-card border border-border focus:outline-none focus:border-primary text-foreground placeholder:text-foreground/50"
-                  />
+              <div className="mt-2 space-y-3">
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs text-muted mb-1">Epochs</label>
+                    <input type="number" value={epochs} onChange={(e) => setEpochs(e.target.value)} disabled={submitting} placeholder={String(d.epochs)} className={inputClass} />
+                  </div>
+                  {!isUnetpp && (
+                    <div>
+                      <label className="block text-xs text-muted mb-1">Learning Rate</label>
+                      <input type="text" value={lr} onChange={(e) => setLr(e.target.value)} disabled={submitting} placeholder={d.lr || '0.0001'} className={inputClass} />
+                    </div>
+                  )}
                 </div>
-                <div>
-                  <label className="block text-xs text-muted mb-1">Learning Rate</label>
-                  <input
-                    type="text"
-                    value={lr}
-                    onChange={(e) => setLr(e.target.value)}
-                    disabled={submitting}
-                    placeholder={d.lr}
-                    className="w-full px-3 py-1.5 text-sm rounded-md bg-card border border-border focus:outline-none focus:border-primary text-foreground placeholder:text-foreground/50"
-                  />
-                </div>
+                {isUnetpp && (
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-xs text-muted mb-1">LR Encoder</label>
+                      <input type="text" value={lrEncoder} onChange={(e) => setLrEncoder(e.target.value)} disabled={submitting} placeholder={d.lr_enc || '0.00001'} className={inputClass} />
+                    </div>
+                    <div>
+                      <label className="block text-xs text-muted mb-1">LR Decoder</label>
+                      <input type="text" value={lrDecoder} onChange={(e) => setLrDecoder(e.target.value)} disabled={submitting} placeholder={d.lr_dec || '0.00005'} className={inputClass} />
+                    </div>
+                  </div>
+                )}
               </div>
               );
             })()}

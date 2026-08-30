@@ -27,6 +27,8 @@ class CreateJobRequest(BaseModel):
     name: str = Field(min_length=1, max_length=128)
     epochs: int | None = None
     lr: float | None = None
+    lr_encoder: float | None = None
+    lr_decoder: float | None = None
 
 
 class JobResponse(BaseModel):
@@ -146,6 +148,10 @@ async def create_finetune_job(body: CreateJobRequest, user_id: UUID = Depends(re
         training_config["epochs"] = body.epochs
     if body.lr:
         training_config["lr"] = body.lr
+    if body.lr_encoder:
+        training_config["lr_encoder"] = body.lr_encoder
+    if body.lr_decoder:
+        training_config["lr_decoder"] = body.lr_decoder
 
     row = await fetch_one(
         """INSERT INTO jobs (owner_id, name, job_type, status, model_id, dataset_id, gcs_images_zip, gcs_masks_zip, artifacts)

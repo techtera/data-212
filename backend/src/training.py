@@ -385,6 +385,10 @@ async def _ssh_finetune(job_id: str, model_name: str, job_name: str, owner_id: s
         extra_args += f" --epochs {training_config['epochs']}"
     if training_config.get("lr"):
         extra_args += f" --lr {training_config['lr']}"
+    if training_config.get("lr_encoder"):
+        extra_args += f" --lr-encoder {training_config['lr_encoder']}"
+    if training_config.get("lr_decoder"):
+        extra_args += f" --lr-decoder {training_config['lr_decoder']}"
 
     client = _get_ssh_client()
     job_dir = f"{VM_WORKDIR}/jobs/{job_id}"
