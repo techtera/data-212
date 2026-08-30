@@ -141,36 +141,20 @@ function JobDetailContent() {
               <StatusBadge status={job.status} />
             </div>
 
-            {/* Running state — pipeline steps */}
+            {/* Running state */}
             {(job.status === 'running' || job.status === 'uploading') && (
               <div className="border border-border/40 rounded-2xl p-5 bg-card/40">
-                <div className="flex items-center gap-2 mb-4">
-                  <Loader2 size={18} className="text-primary animate-spin" />
-                  <p className="text-foreground font-medium">Processing pipeline</p>
+                <div className="flex items-center gap-3">
+                  <Loader2 size={20} className="text-primary animate-spin shrink-0" />
+                  <div>
+                    <p className="text-foreground font-medium">
+                      {job.job_type === 'finetune' ? 'Fine-tuning in progress...' : 'Inference in progress...'}
+                    </p>
+                    <p className="text-xs text-muted mt-1">
+                      Running on 2x A100 80GB GPU server. This page will update automatically when complete.
+                    </p>
+                  </div>
                 </div>
-                <div className="space-y-2">
-                  {pipelineSteps.map((step, i) => {
-                    const isDone = i < currentStep;
-                    const isCurrent = i === currentStep;
-                    return (
-                      <div key={i} className="flex items-center gap-2.5 text-sm">
-                        {isDone ? (
-                          <CheckCircle2 size={14} className="text-success shrink-0" />
-                        ) : isCurrent ? (
-                          <Loader2 size={14} className="text-primary animate-spin shrink-0" />
-                        ) : (
-                          <div className="w-3.5 h-3.5 rounded-full border border-border shrink-0" />
-                        )}
-                        <span className={isDone ? 'text-muted line-through' : isCurrent ? 'text-foreground font-medium' : 'text-muted'}>
-                          {step}
-                        </span>
-                      </div>
-                    );
-                  })}
-                </div>
-                <p className="text-xs text-muted mt-4">
-                  Running on 2x A100 80GB GPU server. Polling every 3s...
-                </p>
               </div>
             )}
 
