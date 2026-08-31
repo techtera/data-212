@@ -53,7 +53,7 @@ function NewJobContent() {
 
   const filteredModels = models.filter(m => {
     if (m.category !== category) return false;
-    if (jobType === 'eval' && (m as unknown as { finetune_only?: boolean }).finetune_only) return false;
+    if (m.is_agent) return false;
     return true;
   });
 
@@ -177,7 +177,7 @@ function NewJobContent() {
             </div>
           </div>
 
-          {/* AI Agent link */}
+          {/* AI Agent links */}
           {jobType === 'finetune' && (
             <Link
               href="/jobs/agent-train"
@@ -185,6 +185,15 @@ function NewJobContent() {
             >
               <Search size={15} />
               Want to train a new architecture? Use AI Agent
+            </Link>
+          )}
+          {jobType === 'eval' && (
+            <Link
+              href="/jobs/agent-inference"
+              className="w-full py-2.5 px-4 rounded-xl border border-dashed border-accent/30 text-sm text-accent/80 hover:text-accent hover:border-accent/60 hover:bg-accent/5 transition-all flex items-center justify-center gap-2"
+            >
+              <FlaskConical size={15} />
+              Have an AI-trained model? Run Agent Inference
             </Link>
           )}
 

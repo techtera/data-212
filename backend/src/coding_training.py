@@ -1,7 +1,6 @@
-"""Coding agent — generates and debugs training/inference scripts using Gemini LLM."""
+"""Coding agent — training script generation and debugging."""
 
 import asyncio
-import json
 import logging
 import re
 from uuid import UUID
@@ -14,12 +13,12 @@ from .auth import require_auth
 from .config import settings
 from .db import execute, fetch_all
 from .gcs import _get_bucket
+from .agent_template import AGENT_TRAIN_TEMPLATE
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(prefix="/coding", tags=["coding"])
+router = APIRouter(prefix="/coding", tags=["coding-train"])
 
-# GCS template paths
 TEMPLATE_PATHS = {
     "edge_train": "finetune/code/unetpp_finetune.py",
     "object_train": "finetune/code/yolo_finetune.py",
@@ -36,7 +35,7 @@ def _load_template(key: str) -> str:
         raise HTTPException(status_code=500, detail=f"Template not found on GCS: {TEMPLATE_PATHS[key]}")
     return blob.download_as_text()
 
-# VM context shared with agent
+
 VM_TRAINING_CONTEXT = """
 The training script runs on a GPU VM via this bash wrapper:
 1. Script downloaded to $JOB_DIR/train.py
@@ -48,16 +47,6 @@ The training script runs on a GPU VM via this bash wrapper:
 Mask naming:
 - Edge masks: image "abc.png" -> mask "abc_mask.png"
 - Object masks: image "abc.png" -> mask "abc.txt" (YOLO polygon format)
-"""
-
-VM_INFERENCE_CONTEXT = """
-The inference script runs on a GPU VM via this bash wrapper:
-1. Script downloaded to $JOB_DIR/script.py
-2. Model checkpoint downloaded to $JOB_DIR/model.pt
-3. Images extracted FLAT into $JOB_DIR/images/ (all .png/.jpg files directly)
-4. Script called as: python script.py --model-path $JOB_DIR/model.pt --images-dir $JOB_DIR/images --output-dir $JOB_DIR/output --job-id XXX
-5. Optional: --masks-dir $JOB_DIR/masks (if user provides ground truth for metrics)
-6. Must save: output/predictions/*.png, output/metrics.json
 """
 
 
@@ -108,6 +97,7 @@ def _strip_markdown(code: str) -> str:
 # Generate Training Code
 # ---------------------------------------------------------------------------
 
+
 class GenTrainRequest(BaseModel):
     report: str = Field(min_length=50)
     job_name: str = Field(min_length=1, max_length=128)
@@ -126,7 +116,6 @@ async def generate_training_code(body: GenTrainRequest, user_id: UUID = Depends(
     if not settings.GEMINI_API_KEY:
         raise HTTPException(status_code=503, detail="Not configured")
 
-    # Step 1: Get model architecture line from Gemini
     model_prompt = f"""Based on this research report, give me the SINGLE Python line that creates the segmentation model using segmentation_models_pytorch (smp).
 
 RESEARCH REPORT:
@@ -139,38 +128,37 @@ RULES:
 - Output: classes=1 (binary), in_channels=3
 - Use encoder_weights="imagenet"
 - For edge masks include decoder_attention_type="scse" if UnetPlusPlus
+- Do NOT include activation= parameter (model MUST output raw logits, loss function handles sigmoid)
 
 OUTPUT EXACTLY ONE LINE like:
 smp.DeepLabV3Plus(encoder_name="resnet50", encoder_weights="imagenet", in_channels=3, classes=1)
 
-JUST the smp.XXX(...) call. Nothing else."""
+JUST the smp.XXX(...) call. Nothing else. No activation parameter."""
 
     model_line = await _call_gemini(model_prompt, max_tokens=256)
     model_line = _strip_markdown(model_line).split("\n")[0].strip()
     if not model_line.startswith("smp."):
         model_line = 'smp.UnetPlusPlus(encoder_name="resnet50", encoder_weights="imagenet", in_channels=3, classes=1)'
 
+    # Sanitize: strip activation= parameter to ensure raw logit output
+    model_line = re.sub(r',\s*activation\s*=\s*["\'][^"\']*["\']', '', model_line)
+
     logger.info("Coding agent model line: %s", model_line)
 
-    # Step 2: Load template from GCS and inject model line
-    template_key = "edge_train" if body.mask_type == "edge" else "object_train"
-    code = _load_template(template_key)
+    # Use embedded template — hardcoded metrics, predictions, JSON output format
+    code = AGENT_TRAIN_TEMPLATE
     code = re.sub(r'smp\.UnetPlusPlus\([^)]+\)', model_line, code, count=1)
-    code = code.replace('encoder_weights=None', 'encoder_weights="imagenet"')
 
-    # Step 3: Upload to GCS
     gcs_path = f"agent-scripts/{user_id}/{body.job_name}/train.py"
     bucket = _get_bucket()
     bucket.blob(gcs_path).upload_from_string(code, content_type="text/x-python")
 
-    # Save report too
     bucket.blob(f"agent-scripts/{user_id}/{body.job_name}/report.md").upload_from_string(
         body.report, content_type="text/markdown"
     )
 
     logger.info("Training script uploaded: %s", gcs_path)
 
-    # Step 4: Register model
     category = "edge_mask" if body.mask_type == "edge" else "object_mask"
     existing = await fetch_all(
         "SELECT version FROM user_models WHERE user_id = $1 AND base_model = $2 ORDER BY version DESC LIMIT 1",
@@ -193,105 +181,23 @@ JUST the smp.XXX(...) call. Nothing else."""
 
 
 # ---------------------------------------------------------------------------
-# Generate Inference Code (after training succeeds)
+# Debug Training Code
 # ---------------------------------------------------------------------------
 
-class GenInferenceRequest(BaseModel):
-    job_id: str
-    model_name: str
 
-
-class GenInferenceResponse(BaseModel):
-    message: str
-    script_path: str
-
-
-@router.post("/generate-inference", response_model=GenInferenceResponse)
-async def generate_inference_code(body: GenInferenceRequest, user_id: UUID = Depends(require_auth)):
-    """Generate inference script based on the training code that succeeded."""
-    if not settings.GEMINI_API_KEY:
-        raise HTTPException(status_code=503, detail="Not configured")
-
-    from .db import fetch_one as _fetch_one
-
-    # Get model info
-    um = await _fetch_one("SELECT * FROM user_models WHERE model_name = $1 AND user_id = $2", body.model_name, user_id)
-    if not um:
-        raise HTTPException(status_code=404, detail="Model not found")
-
-    # Read training code from GCS
-    train_gcs_path = um["inference_script"]
-    bucket = _get_bucket()
-    blob = bucket.blob(train_gcs_path)
-    if not blob.exists():
-        raise HTTPException(status_code=404, detail="Training script not found")
-    training_code = blob.download_as_text()
-
-    # Load inference template from GCS
-    category = um["category"]
-    template_key = "edge_inference" if category == "edge_mask" else "object_inference"
-    try:
-        template_code = _load_template(template_key)
-    except Exception:
-        template_code = ""
-
-    # Ask Gemini to generate inference code
-    prompt = f"""Generate a standalone inference script for this trained model.
-
-TRAINING CODE (shows model architecture):
-{training_code[:6000]}
-
-REFERENCE INFERENCE SCRIPT (follow this format):
-{template_code[:4000]}
-
-{VM_INFERENCE_CONTEXT}
-
-REQUIREMENTS:
-1. Use the SAME model architecture from the training code
-2. Follow the SAME CLI interface: --model-path, --images-dir, --output-dir, --job-id, --masks-dir (optional)
-3. Load weights from checkpoint: ckpt = torch.load(model_path); model.load_state_dict(ckpt["model"])
-4. If --masks-dir provided, compute metrics (edge: dice, boundary_f1, boundary_precision, boundary_recall / object: pixel_accuracy, mean_iou, f1, precision, recall)
-5. Save prediction overlay images to output/predictions/
-6. Save metrics.json (only if masks provided)
-7. Single self-contained file, all imports at top
-
-OUTPUT: ONLY the raw Python code. No markdown."""
-
-    inference_code = await _call_gemini(prompt)
-    inference_code = _strip_markdown(inference_code)
-
-    if len(inference_code) < 500:
-        raise HTTPException(status_code=502, detail="Failed to generate inference code")
-
-    # Upload inference script (at predictable path, don't overwrite training_script column)
-    infer_gcs_path = train_gcs_path.replace("/train.py", "/inference.py")
-    bucket.blob(infer_gcs_path).upload_from_string(inference_code, content_type="text/x-python")
-
-    logger.info("Inference script generated: %s", infer_gcs_path)
-
-    return GenInferenceResponse(
-        message="Inference script generated.",
-        script_path=f"gs://{settings.GCS_BUCKET_NAME}/{infer_gcs_path}",
-    )
-
-
-# ---------------------------------------------------------------------------
-# Debug Code (fix failed training/inference)
-# ---------------------------------------------------------------------------
-
-class DebugRequest(BaseModel):
+class DebugTrainRequest(BaseModel):
     job_id: str
     model_name: str
     user_message: str = ""
 
 
-class DebugResponse(BaseModel):
+class DebugTrainResponse(BaseModel):
     message: str
 
 
-@router.post("/debug", response_model=DebugResponse)
-async def debug_code(body: DebugRequest, user_id: UUID = Depends(require_auth)):
-    """Read failed job error + current script, ask Gemini to fix, re-upload, re-trigger."""
+@router.post("/debug", response_model=DebugTrainResponse)
+async def debug_training_code(body: DebugTrainRequest, user_id: UUID = Depends(require_auth)):
+    """Read failed training job error + current script, ask Gemini to fix, re-upload, re-trigger."""
     if not settings.GEMINI_API_KEY:
         raise HTTPException(status_code=503, detail="Not configured")
 
@@ -305,17 +211,11 @@ async def debug_code(body: DebugRequest, user_id: UUID = Depends(require_auth)):
 
     error_msg = job["error_message"] or "Unknown error"
 
-    # Get current script from GCS
     um = await _fetch_one("SELECT * FROM user_models WHERE model_name = $1 AND user_id = $2", body.model_name, user_id)
     if not um:
         raise HTTPException(status_code=404, detail="Model not found")
 
-    # Determine which script to fix based on job type
-    is_inference = job["job_type"] == "eval"
-    if is_inference:
-        gcs_path = um["inference_script"].replace("/train.py", "/inference.py")
-    else:
-        gcs_path = um["inference_script"]
+    gcs_path = um["inference_script"]
 
     bucket = _get_bucket()
     blob = bucket.blob(gcs_path)
@@ -326,33 +226,7 @@ async def debug_code(body: DebugRequest, user_id: UUID = Depends(require_auth)):
 
     user_hint = f"\n\nUSER HINT: {body.user_message}" if body.user_message else ""
 
-    if is_inference:
-        debug_prompt = f"""Fix this Python INFERENCE script that failed.
-
-CONTEXT: {VM_INFERENCE_CONTEXT}
-
-ERROR:
-{error_msg[-1500:]}
-
-FULL SCRIPT:
-{current_code[:12000]}
-
-FIX RULES:
-1. CLI args MUST be: --model-path, --images-dir, --output-dir, --job-id (and optional --masks-dir)
-2. Load model from checkpoint: ckpt = torch.load(model_path, map_location=device); model.load_state_dict(ckpt["model"])
-3. MUST save prediction overlay images in output_dir/predictions/
-4. MUST save output_dir/metrics.json (with predictions list at minimum)
-5. os.makedirs(output_dir + "/predictions", exist_ok=True) at start
-6. Do NOT rename CLI arguments (use dashes: --model-path not --model_path)
-7. Common bugs:
-   - list index out of range: check model output dimensions, ensure predictions dir exists
-   - state_dict key mismatch: try loading with strict=False
-   - Device issues: map_location=device when loading
-8. Return the COMPLETE fixed script{user_hint}
-
-OUTPUT: ONLY raw Python code. No markdown."""
-    else:
-        debug_prompt = f"""Fix this Python TRAINING script that failed.
+    debug_prompt = f"""Fix this Python TRAINING script that failed.
 
 CONTEXT: {VM_TRAINING_CONTEXT}
 
@@ -383,25 +257,16 @@ OUTPUT: ONLY raw Python code. No markdown."""
     if len(fixed_code) < 500:
         raise HTTPException(status_code=502, detail="Debug agent returned invalid code")
 
-    # Upload fixed code
     blob.upload_from_string(fixed_code, content_type="text/x-python")
-    logger.info("Debug: fixed script uploaded to %s", gcs_path)
+    logger.info("Debug: fixed training script uploaded to %s", gcs_path)
 
-    # Reset job and re-trigger based on job type
     await execute(
         "UPDATE jobs SET status = 'running', error_message = NULL, updated_at = NOW() WHERE id = $1",
         body.job_id,
     )
 
-    if job["job_type"] == "eval":
-        from .inference_agent import run_agent_inference
-        asyncio.get_event_loop().create_task(
-            run_agent_inference(str(job["id"]), job["model_id"], job["name"], str(user_id))
-        )
-        return DebugResponse(message="Code fixed. Inference restarted.")
-    else:
-        from .training_agent import run_agent_train
-        asyncio.get_event_loop().create_task(
-            run_agent_train(str(job["id"]), job["model_id"], job["name"], str(user_id))
-        )
-        return DebugResponse(message="Code fixed. Training restarted.")
+    from .training_agent import run_agent_train
+    asyncio.get_event_loop().create_task(
+        run_agent_train(str(job["id"]), job["model_id"], job["name"], str(user_id))
+    )
+    return DebugTrainResponse(message="Training code fixed. Training restarted.")

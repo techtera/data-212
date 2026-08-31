@@ -24,6 +24,7 @@ class ModelEntry(BaseModel):
     finetune_script: str
     save_path: str
     user_id: str
+    is_agent: bool = False
 
 
 def _load_models() -> list[dict]:
@@ -89,7 +90,7 @@ async def list_models(user_id: UUID = Depends(require_auth)):
             "inference_script": um["inference_script"],
             "finetune_script": f"gs://terafac-datasets/{um['inference_script']}" if is_agent else "",
             "usr_inference_script": um["inference_script"],
-            "finetune_only": is_agent,
+            "is_agent": is_agent,
             "save_path": "",
             "user_id": str(um["user_id"]),
         })

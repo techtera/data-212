@@ -9,7 +9,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from .config import settings
 from .db import close_pool, init_pool
 from .auth import router as auth_router
-from .coding import router as coding_router
+from .coding_training import router as coding_train_router
+from .coding_inference import router as coding_inference_router
 from .jobs import router as jobs_router
 from .models import router as models_router
 from .research import router as research_router
@@ -51,7 +52,8 @@ app.add_middleware(
 
 # Routers
 app.include_router(auth_router)
-app.include_router(coding_router)
+app.include_router(coding_train_router)
+app.include_router(coding_inference_router)
 app.include_router(jobs_router)
 app.include_router(models_router)
 app.include_router(research_router)

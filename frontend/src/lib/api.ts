@@ -59,6 +59,7 @@ export interface Model {
   finetune_script: string;
   save_path: string;
   user_id: string;
+  is_agent: boolean;
 }
 
 export function getModels(token: string) {
@@ -100,6 +101,13 @@ export function getAgentReport(token: string, jobName: string) {
 
 export function debugTrainingCode(token: string, jobId: string, modelName: string, userMessage: string = '') {
   return request<{ message: string }>('/coding/debug', {
+    method: 'POST',
+    body: JSON.stringify({ job_id: jobId, model_name: modelName, user_message: userMessage }),
+  }, token);
+}
+
+export function debugInferenceCode(token: string, jobId: string, modelName: string, userMessage: string = '') {
+  return request<{ message: string }>('/coding/debug-inference', {
     method: 'POST',
     body: JSON.stringify({ job_id: jobId, model_name: modelName, user_message: userMessage }),
   }, token);
@@ -193,6 +201,10 @@ export function runFinetune(token: string, jobId: string) {
 
 export function runAgentTrain(token: string, jobId: string) {
   return request<{ status: string }>(`/jobs/${jobId}/run-agent-train`, { method: 'POST' }, token);
+}
+
+export function runAgentInference(token: string, jobId: string) {
+  return request<{ status: string }>(`/jobs/${jobId}/run-agent-inference`, { method: 'POST' }, token);
 }
 
 // Results

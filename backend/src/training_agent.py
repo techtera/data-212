@@ -3,6 +3,7 @@
 import asyncio
 import json
 import logging
+from uuid import UUID
 
 from .config import settings
 from .db import execute, fetch_one, fetch_all
@@ -238,6 +239,12 @@ async def _poll_agent_job(job_id: str, job_dir: str, bucket: str, job_name: str,
                            predictions = $4::jsonb, artifacts = $5::jsonb, updated_at = NOW() WHERE id = $6""",
                         results.get("mean_iou", 0), results.get("dice_score", 0), results.get("pixel_accuracy", 0),
                         json.dumps(gcs_predictions), json.dumps(artifacts), job_id,
+                    )
+
+                    checkpoint_gcs = f"finetune/{owner_id}/{job_name}/{model_name}/best.pt"
+                    await execute(
+                        "UPDATE user_models SET checkpoint_path = $1 WHERE model_name = $2 AND user_id = $3",
+                        checkpoint_gcs, model_name, UUID(owner_id),
                     )
 
                     _ssh_exec(client, f"rm -rf {job_dir}")

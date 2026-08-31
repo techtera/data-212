@@ -5,7 +5,7 @@ import { useParams } from 'next/navigation';
 import { useAuth } from '@/lib/auth-context';
 import { Protected } from '@/components/protected';
 import { Navbar } from '@/components/navbar';
-import { getJobs, getResults, getDownload, debugTrainingCode, getAgentReport, type Job, type JobResults } from '@/lib/api';
+import { getJobs, getResults, getDownload, debugTrainingCode, debugInferenceCode, getAgentReport, type Job, type JobResults } from '@/lib/api';
 import { LossChart } from '@/components/loss-chart';
 import { toast } from 'sonner';
 import { ArrowLeft, Download, Loader2, CheckCircle2, XCircle, Clock, Image as ImageIcon } from 'lucide-react';
@@ -179,7 +179,9 @@ function JobDetailContent() {
                         const hint = (document.getElementById('debug-hint') as HTMLInputElement)?.value || '';
                         toast.info(job.job_type === 'eval' ? 'AI Agent is fixing the inference code...' : 'AI Agent is fixing the training code...');
                         try {
-                          const res = await debugTrainingCode(token, id, job.model_name, hint);
+                          const res = job.job_type === 'eval'
+                            ? await debugInferenceCode(token, id, job.model_name, hint)
+                            : await debugTrainingCode(token, id, job.model_name, hint);
                           toast.success(res.message);
                           setTimeout(() => window.location.reload(), 2000);
                         } catch (err) {

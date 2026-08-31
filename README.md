@@ -159,6 +159,115 @@ curl -X POST http://localhost:8000/coding/debug \
   -d "{\"job_id\":\"$JOB_ID\",\"model_name\":\"$MODEL\",\"user_message\":\"masks are _mask.png format\"}"
 ```
 
+### AI Agent Inference (CLI)
+```bash
+# 1. Generate inference code for an agent-trained model
+curl -s -X POST http://localhost:8000/coding/generate-inference \
+  -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
+  -d '{"model_name":"weld-model_agent_v_1"}'
+
+# 2. Upload images + create eval job
+URLS=$(curl -s -X POST http://localhost:8000/uploads/sign \
+  -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
+  -d '{"job_name":"weld-infer"}')
+
+curl -X PUT "$(echo $URLS | jq -r .images_upload_url)" \
+  -H "Content-Type: application/zip" --data-binary @images.zip
+
+JOB_ID=$(curl -s -X POST http://localhost:8000/jobs/eval \
+  -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
+  -d '{"model_name":"weld-model_agent_v_1","name":"weld-infer"}' | jq -r .id)
+
+# 3. Run agent inference
+curl -X POST "http://localhost:8000/jobs/$JOB_ID/run-agent-inference" \
+  -H "Authorization: Bearer $TOKEN"
+
+# 4. If fails, debug with AI
+curl -X POST http://localhost:8000/coding/debug-inference \
+  -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
+  -d "{\"job_id\":\"$JOB_ID\",\"model_name\":\"weld-model_agent_v_1\"}"
+```
+
+## Deployed Platform CLI (PowerShell)
+
+Commands for testing against the deployed platform (Vercel + Render).
+
+### Setup
+```powershell
+$BACKEND = "https://terafac-backend.onrender.com"
+$login = Invoke-RestMethod -Uri "$BACKEND/auth/login" -Method POST -ContentType "application/json" -Body '{"username":"myuser","password":"mypass"}'
+$TOKEN = $login.token
+```
+
+### List Models
+```powershell
+Invoke-RestMethod -Uri "$BACKEND/models" -Headers @{Authorization="Bearer $TOKEN"}
+```
+
+### Run Inference
+```powershell
+# Upload images
+$urls = Invoke-RestMethod -Uri "$BACKEND/uploads/sign" -Method POST -ContentType "application/json" -Headers @{Authorization="Bearer $TOKEN"} -Body '{"job_name":"my-job"}'
+Invoke-WebRequest -Uri $urls.images_upload_url -Method PUT -ContentType "application/zip" -InFile "images.zip"
+
+# Create + run
+$job = Invoke-RestMethod -Uri "$BACKEND/jobs/eval" -Method POST -ContentType "application/json" -Headers @{Authorization="Bearer $TOKEN"} -Body '{"model_name":"YOLO11L-MASKING-MODEL","name":"my-job"}'
+Invoke-RestMethod -Uri "$BACKEND/jobs/$($job.id)/run-eval" -Method POST -Headers @{Authorization="Bearer $TOKEN"}
+
+# Poll results
+Invoke-RestMethod -Uri "$BACKEND/jobs/$($job.id)/results" -Headers @{Authorization="Bearer $TOKEN"}
+```
+
+### Run Fine-tuning
+```powershell
+Invoke-WebRequest -Uri $urls.masks_upload_url -Method PUT -ContentType "application/zip" -InFile "masks.zip"
+$job = Invoke-RestMethod -Uri "$BACKEND/jobs/finetune" -Method POST -ContentType "application/json" -Headers @{Authorization="Bearer $TOKEN"} -Body '{"model_name":"UNETPLUSPLUS-MODEL","name":"my-job"}'
+Invoke-RestMethod -Uri "$BACKEND/jobs/$($job.id)/run-finetune" -Method POST -Headers @{Authorization="Bearer $TOKEN"}
+```
+
+### AI Agent Training (PowerShell)
+```powershell
+# 1. Research
+$research = Invoke-RestMethod -Uri "$BACKEND/research" -Method POST -ContentType "application/json" -Headers @{Authorization="Bearer $TOKEN"} -Body '{"prompt":"Need edge detection for weld seams on steel pipes"}'
+$REPORT = $research.report
+
+# 2. Generate training code
+$body = @{report=$REPORT.Substring(0,2000); job_name="weld-model"; mask_type="edge"} | ConvertTo-Json
+$code = Invoke-RestMethod -Uri "$BACKEND/coding/generate-train" -Method POST -ContentType "application/json" -Headers @{Authorization="Bearer $TOKEN"} -Body $body
+$MODEL = $code.model_name
+
+# 3. Upload data + start agent training
+$urls = Invoke-RestMethod -Uri "$BACKEND/uploads/sign" -Method POST -ContentType "application/json" -Headers @{Authorization="Bearer $TOKEN"} -Body '{"job_name":"weld-model"}'
+Invoke-WebRequest -Uri $urls.images_upload_url -Method PUT -ContentType "application/zip" -InFile "images.zip"
+Invoke-WebRequest -Uri $urls.masks_upload_url -Method PUT -ContentType "application/zip" -InFile "masks.zip"
+
+$job = Invoke-RestMethod -Uri "$BACKEND/jobs/finetune" -Method POST -ContentType "application/json" -Headers @{Authorization="Bearer $TOKEN"} -Body "{`"model_name`":`"$MODEL`",`"name`":`"weld-model`"}"
+Invoke-RestMethod -Uri "$BACKEND/jobs/$($job.id)/run-agent-train" -Method POST -Headers @{Authorization="Bearer $TOKEN"}
+
+# 4. Check status
+Invoke-RestMethod -Uri "$BACKEND/jobs/$($job.id)/results" -Headers @{Authorization="Bearer $TOKEN"}
+```
+
+### AI Agent Inference (PowerShell)
+```powershell
+# 1. Generate inference code for agent-trained model
+$body = @{model_name=$MODEL} | ConvertTo-Json
+Invoke-RestMethod -Uri "$BACKEND/coding/generate-inference" -Method POST -ContentType "application/json" -Headers @{Authorization="Bearer $TOKEN"} -Body $body
+
+# 2. Upload images + create eval job
+$urls = Invoke-RestMethod -Uri "$BACKEND/uploads/sign" -Method POST -ContentType "application/json" -Headers @{Authorization="Bearer $TOKEN"} -Body '{"job_name":"weld-infer"}'
+Invoke-WebRequest -Uri $urls.images_upload_url -Method PUT -ContentType "application/zip" -InFile "images.zip"
+
+$job = Invoke-RestMethod -Uri "$BACKEND/jobs/eval" -Method POST -ContentType "application/json" -Headers @{Authorization="Bearer $TOKEN"} -Body "{`"model_name`":`"$MODEL`",`"name`":`"weld-infer`"}"
+Invoke-RestMethod -Uri "$BACKEND/jobs/$($job.id)/run-agent-inference" -Method POST -Headers @{Authorization="Bearer $TOKEN"}
+
+# 3. Check results
+Invoke-RestMethod -Uri "$BACKEND/jobs/$($job.id)/results" -Headers @{Authorization="Bearer $TOKEN"}
+
+# 4. Download predictions (save to file before URLs expire)
+Invoke-RestMethod -Uri "$BACKEND/jobs/$($job.id)/results" -Headers @{Authorization="Bearer $TOKEN"} | ConvertTo-Json -Depth 10 | Out-File "results.json"
+```
+
 ## AI Agent Sample Prompts
 
 - "We need to segment welding seams and detect defects like porosity and cracks in steel pipe images captured by industrial cameras at 1280x720 resolution"
