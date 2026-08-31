@@ -13,6 +13,8 @@ logger = logging.getLogger(__name__)
 VM_WORKDIR = "/home/terafacdata_gmail_com/Shubhojit"
 VM_VENV = f"{VM_WORKDIR}/venv/bin/python"
 
+MAX_AUTO_RETRIES = 10
+
 
 def _get_ssh_client():
     import io
@@ -51,7 +53,8 @@ def _ssh_exec(client, command: str) -> str:
 async def run_agent_inference(job_id: str, model_name: str, job_name: str, owner_id: str = "") -> None:
     """Run agent-generated inference on VM."""
     try:
-        await _ssh_agent_inference(job_id, model_name, job_name, owner_id)
+        await _launch_agent_inference(job_id, model_name, job_name, owner_id)
+        await _poll_agent_inference(job_id, f"{VM_WORKDIR}/jobs/{job_id}", settings.GCS_BUCKET_NAME, job_name, model_name, owner_id)
     except Exception as e:
         logger.exception("Agent inference job %s failed", job_id)
         await execute(
@@ -60,13 +63,12 @@ async def run_agent_inference(job_id: str, model_name: str, job_name: str, owner
         )
 
 
-async def _ssh_agent_inference(job_id: str, model_name: str, job_name: str, owner_id: str = "") -> None:
-    """SSH to VM: clean dir, download inference script + checkpoint + images, run, upload predictions."""
+async def _launch_agent_inference(job_id: str, model_name: str, job_name: str, owner_id: str = "") -> None:
+    """SSH to VM: clean dir, download inference script + checkpoint + images, launch in screen."""
     model_info = await get_model_by_name_async(model_name, owner_id)
     if not model_info:
         raise RuntimeError(f"Model not found: {model_name}")
 
-    # Inference script
     script_gs = model_info.get("inference_script", "") or model_info.get("usr_inference_script", "")
     if not script_gs:
         raise RuntimeError(f"No inference script for model: {model_name}")
@@ -75,7 +77,6 @@ async def _ssh_agent_inference(job_id: str, model_name: str, job_name: str, owne
     script_bucket = script_parts[0]
     script_blob = script_parts[1]
 
-    # Checkpoint
     load_path = model_info.get("load_path", "")
     has_checkpoint = bool(load_path and load_path.startswith("gs://"))
     if has_checkpoint:
@@ -187,12 +188,11 @@ echo "=== Agent Inference Complete ==="
     finally:
         client.close()
 
-    await _poll_agent_inference(job_id, job_dir, data_bucket, job_name, owner_id)
 
-
-async def _poll_agent_inference(job_id: str, job_dir: str, bucket: str, job_name: str, owner_id: str = "") -> None:
-    """Poll VM for agent inference completion."""
+async def _poll_agent_inference(job_id: str, job_dir: str, bucket: str, job_name: str, model_name: str, owner_id: str = "") -> None:
+    """Poll VM for agent inference completion. Auto-retries up to MAX_AUTO_RETRIES times."""
     poll_interval = 10
+    retry_count = 0
 
     while True:
         await asyncio.sleep(poll_interval)
@@ -203,12 +203,27 @@ async def _poll_agent_inference(job_id: str, job_dir: str, bucket: str, job_name
 
                 if status == "ERROR":
                     error_log = _ssh_exec(client, f"tail -20 {job_dir}/logs/run.log 2>/dev/null || echo 'Unknown error'").strip()
-                    last_lines = error_log.split("\n")[-5:]
+                    last_lines = "\n".join(error_log.split("\n")[-5:])
+                    _ssh_exec(client, f"rm -rf {job_dir}")
+                    client.close()
+
+                    if retry_count < MAX_AUTO_RETRIES:
+                        retry_count += 1
+                        logger.info("Agent inference job %s failed (attempt %d/%d), auto-debugging...", job_id, retry_count, MAX_AUTO_RETRIES)
+                        await execute(
+                            "UPDATE jobs SET error_message = $1, updated_at = NOW() WHERE id = $2",
+                            f"Auto-retry {retry_count}/{MAX_AUTO_RETRIES}: {last_lines[:200]}", job_id,
+                        )
+                        from .coding_inference import auto_debug_inference
+                        fixed = await auto_debug_inference(model_name, owner_id, last_lines)
+                        if fixed:
+                            await _launch_agent_inference(job_id, model_name, job_name, owner_id)
+                            continue
+
                     await execute(
                         "UPDATE jobs SET status = 'error', error_message = $1, updated_at = NOW() WHERE id = $2",
-                        "\n".join(last_lines)[:500], job_id,
+                        f"Failed after {retry_count} retries. Last error: {last_lines[:300]}", job_id,
                     )
-                    _ssh_exec(client, f"rm -rf {job_dir}")
                     return
 
                 if status == "DONE":

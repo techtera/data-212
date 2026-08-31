@@ -1,4 +1,4 @@
-"""Agent training/inference on VM — separate pipeline from normal training.py."""
+"""Agent training on VM — separate pipeline from normal training.py."""
 
 import asyncio
 import json
@@ -13,6 +13,8 @@ logger = logging.getLogger(__name__)
 
 VM_WORKDIR = "/home/terafacdata_gmail_com/Shubhojit"
 VM_VENV = f"{VM_WORKDIR}/venv/bin/python"
+
+MAX_AUTO_RETRIES = 10
 
 
 def _get_ssh_client():
@@ -58,7 +60,8 @@ def _ssh_exec(client, command: str) -> str:
 async def run_agent_train(job_id: str, model_name: str, job_name: str, owner_id: str = "") -> None:
     """Run agent-generated training. Separate from normal finetune pipeline."""
     try:
-        await _ssh_agent_train(job_id, model_name, job_name, owner_id)
+        await _launch_agent_train(job_id, model_name, job_name, owner_id)
+        await _poll_agent_job(job_id, f"{VM_WORKDIR}/jobs/{job_id}", settings.GCS_BUCKET_NAME, job_name, model_name, owner_id)
     except Exception as e:
         logger.exception("Agent train job %s failed", job_id)
         await execute(
@@ -67,8 +70,8 @@ async def run_agent_train(job_id: str, model_name: str, job_name: str, owner_id:
         )
 
 
-async def _ssh_agent_train(job_id: str, model_name: str, job_name: str, owner_id: str = "") -> None:
-    """SSH to VM: clean dir, download code+data fresh, run training, upload results."""
+async def _launch_agent_train(job_id: str, model_name: str, job_name: str, owner_id: str = "") -> None:
+    """SSH to VM: clean dir, download code+data fresh, launch training in screen."""
     model_info = await get_model_by_name_async(model_name, owner_id)
     if not model_info:
         raise RuntimeError(f"Model not found: {model_name}")
@@ -84,6 +87,15 @@ async def _ssh_agent_train(job_id: str, model_name: str, job_name: str, owner_id
     images_gcs_path = f"upload/{owner_id}/{job_name}/images.zip"
     masks_gcs_path = f"upload/{owner_id}/{job_name}/masks.zip"
     data_bucket = settings.GCS_BUCKET_NAME
+
+    # Read epochs/lr from job artifacts
+    job_record = await fetch_one("SELECT artifacts FROM jobs WHERE id = $1", job_id)
+    training_config = {}
+    if job_record and job_record["artifacts"]:
+        arts = job_record["artifacts"] if isinstance(job_record["artifacts"], dict) else json.loads(job_record["artifacts"] or "{}")
+        training_config = {k: v for k, v in arts.items() if k in ("epochs", "lr")}
+    epochs = training_config.get("epochs", 10)
+    lr = training_config.get("lr", 0.0001)
 
     client = _get_ssh_client()
     job_dir = f"{VM_WORKDIR}/jobs/{job_id}"
@@ -145,7 +157,9 @@ $VENV "$JOB_DIR/train.py" \\
     --masks-dir "$JOB_DIR/masks" \\
     --output-dir "$JOB_DIR/output" \\
     --job-id {job_id} \\
-    --split 0.9
+    --split 0.9 \\
+    --epochs {epochs} \\
+    --lr {lr}
 
 # 5. Upload results
 echo "Uploading results..."
@@ -177,18 +191,16 @@ echo "=== Agent Train Complete ==="
         _ssh_exec(client, f"cat > {job_dir}/run_job.sh << 'JOBEOF'\n{job_script}\nJOBEOF")
         _ssh_exec(client, f"chmod +x {job_dir}/run_job.sh")
         _ssh_exec(client, f"screen -dmS {screen_name} bash {job_dir}/run_job.sh")
-        logger.info("Agent train job %s launched", job_id)
+        logger.info("Agent train job %s launched (epochs=%s, lr=%s)", job_id, epochs, lr)
 
     finally:
         client.close()
 
-    await _poll_agent_job(job_id, job_dir, data_bucket, job_name, model_name, owner_id)
-
-
 
 async def _poll_agent_job(job_id: str, job_dir: str, bucket: str, job_name: str, model_name: str, owner_id: str = "") -> None:
-    """Poll VM for agent training completion."""
+    """Poll VM for agent training completion. Auto-retries up to MAX_AUTO_RETRIES times."""
     poll_interval = 15
+    retry_count = 0
 
     while True:
         await asyncio.sleep(poll_interval)
@@ -199,12 +211,27 @@ async def _poll_agent_job(job_id: str, job_dir: str, bucket: str, job_name: str,
 
                 if status == "ERROR":
                     error_log = _ssh_exec(client, f"tail -20 {job_dir}/logs/run.log 2>/dev/null || echo 'Unknown error'").strip()
-                    last_lines = error_log.split("\n")[-5:]
+                    last_lines = "\n".join(error_log.split("\n")[-5:])
+                    _ssh_exec(client, f"rm -rf {job_dir}")
+                    client.close()
+
+                    if retry_count < MAX_AUTO_RETRIES:
+                        retry_count += 1
+                        logger.info("Agent train job %s failed (attempt %d/%d), auto-debugging...", job_id, retry_count, MAX_AUTO_RETRIES)
+                        await execute(
+                            "UPDATE jobs SET error_message = $1, updated_at = NOW() WHERE id = $2",
+                            f"Auto-retry {retry_count}/{MAX_AUTO_RETRIES}: {last_lines[:200]}", job_id,
+                        )
+                        from .coding_training import auto_debug_train
+                        fixed = await auto_debug_train(model_name, owner_id, last_lines)
+                        if fixed:
+                            await _launch_agent_train(job_id, model_name, job_name, owner_id)
+                            continue
+
                     await execute(
                         "UPDATE jobs SET status = 'error', error_message = $1, updated_at = NOW() WHERE id = $2",
-                        "\n".join(last_lines)[:500], job_id,
+                        f"Failed after {retry_count} retries. Last error: {last_lines[:300]}", job_id,
                     )
-                    _ssh_exec(client, f"rm -rf {job_dir}")
                     return
 
                 if status == "DONE":
@@ -214,7 +241,6 @@ async def _poll_agent_job(job_id: str, job_dir: str, bucket: str, job_name: str,
                     preds = results.get("predictions", [])
                     gcs_predictions = [f"finetune/{owner_id}/{job_name}/{model_name}/predictions/{p.split('/')[-1]}" for p in preds]
 
-                    # Get training script path for "View Training Code"
                     model_info_for_script = await get_model_by_name_async(model_name, owner_id)
                     train_script_blob = ""
                     if model_info_for_script:

@@ -29,6 +29,67 @@ The inference script runs on a GPU VM via this bash wrapper:
 
 
 # ---------------------------------------------------------------------------
+# Auto-debug (called from polling loop, no HTTP deps)
+# ---------------------------------------------------------------------------
+
+
+async def auto_debug_inference(model_name: str, user_id: str, error_msg: str) -> bool:
+    """Auto-debug inference code. Called from polling loop on error. Returns True if fix uploaded."""
+    if not settings.GEMINI_API_KEY:
+        return False
+    try:
+        from .db import fetch_one as _fetch_one
+        um = await _fetch_one(
+            "SELECT * FROM user_models WHERE model_name = $1 AND user_id = $2",
+            model_name, UUID(user_id),
+        )
+        if not um:
+            return False
+        gcs_path = um["inference_script"].replace("/train.py", "/inference.py")
+        bucket = _get_bucket()
+        blob = bucket.blob(gcs_path)
+        if not blob.exists():
+            return False
+        current_code = blob.download_as_text()
+
+        debug_prompt = f"""Fix this Python INFERENCE script that failed.
+
+CONTEXT: {VM_INFERENCE_CONTEXT}
+
+ERROR:
+{error_msg[-1500:]}
+
+FULL SCRIPT:
+{current_code[:12000]}
+
+FIX RULES:
+1. CLI args MUST be: --model-path, --images-dir, --output-dir, --job-id (and optional --masks-dir)
+2. Load model from checkpoint: ckpt = torch.load(model_path, map_location=device); model.load_state_dict(ckpt["model"])
+3. MUST save prediction overlay images in output_dir/predictions/
+4. MUST save output_dir/metrics.json (with predictions list at minimum)
+5. os.makedirs(output_dir + "/predictions", exist_ok=True) at start
+6. Do NOT rename CLI arguments (use dashes: --model-path not --model_path)
+7. Common bugs:
+   - list index out of range: check model output dimensions, ensure predictions dir exists
+   - state_dict key mismatch: try loading with strict=False
+   - Device issues: map_location=device when loading
+8. Return the COMPLETE fixed script
+
+OUTPUT: ONLY raw Python code. No markdown."""
+
+        fixed_code = await _call_gemini(debug_prompt)
+        fixed_code = _strip_markdown(fixed_code)
+        if len(fixed_code) < 500:
+            return False
+        blob.upload_from_string(fixed_code, content_type="text/x-python")
+        logger.info("Auto-debug: fixed inference script uploaded to %s", gcs_path)
+        return True
+    except Exception as e:
+        logger.warning("Auto-debug inference failed: %s", e)
+        return False
+
+
+# ---------------------------------------------------------------------------
 # Generate Inference Code
 # ---------------------------------------------------------------------------
 

@@ -153,6 +153,9 @@ function JobDetailContent() {
                     <p className="text-xs text-muted mt-1">
                       Running on 2x A100 80GB GPU server. This page will update automatically when complete.
                     </p>
+                    {job.model_name.includes('_agent_') && (
+                      <p className="text-xs text-muted mt-1">Auto-debug enabled (up to 10 retries)</p>
+                    )}
                   </div>
                 </div>
               </div>
@@ -167,31 +170,43 @@ function JobDetailContent() {
                 </p>
                 {job.model_name.includes('_agent_') && (
                   <div className="mt-3 space-y-2">
-                    <input
-                      id="debug-hint"
-                      type="text"
-                      placeholder="Optional: hint for the AI (e.g. 'masks are _mask.png format')"
-                      className="w-full px-3 py-2 rounded-lg bg-card/60 border border-border/50 text-sm text-foreground placeholder:text-muted/50 focus:outline-none focus:ring-2 focus:ring-warning/20"
-                    />
-                    <button
-                      onClick={async () => {
-                        if (!token || !id) return;
-                        const hint = (document.getElementById('debug-hint') as HTMLInputElement)?.value || '';
-                        toast.info(job.job_type === 'eval' ? 'AI Agent is fixing the inference code...' : 'AI Agent is fixing the training code...');
-                        try {
-                          const res = job.job_type === 'eval'
-                            ? await debugInferenceCode(token, id, job.model_name, hint)
-                            : await debugTrainingCode(token, id, job.model_name, hint);
-                          toast.success(res.message);
-                          setTimeout(() => window.location.reload(), 2000);
-                        } catch (err) {
-                          toast.error(err instanceof Error ? err.message : 'Debug failed');
-                        }
-                      }}
-                      className="px-4 py-2 rounded-xl bg-warning/20 text-warning text-sm font-semibold hover:bg-warning/30 cursor-pointer transition-all border border-warning/30"
-                    >
-                      {job.job_type === 'eval' ? 'Fix Inference & Retry' : 'Fix Training & Retry'}
-                    </button>
+                    {job.error_message?.startsWith('Auto-retry') && (
+                      <p className="text-xs text-warning/80">
+                        {job.error_message.split(':')[0]}
+                      </p>
+                    )}
+                    <details className="group">
+                      <summary className="text-xs text-muted cursor-pointer hover:text-foreground transition-colors">
+                        Advanced: Manual Debug
+                      </summary>
+                      <div className="mt-2 space-y-2">
+                        <input
+                          id="debug-hint"
+                          type="text"
+                          placeholder="Optional: hint for the AI (e.g. 'masks are _mask.png format')"
+                          className="w-full px-3 py-2 rounded-lg bg-card/60 border border-border/50 text-sm text-foreground placeholder:text-muted/50 focus:outline-none focus:ring-2 focus:ring-warning/20"
+                        />
+                        <button
+                          onClick={async () => {
+                            if (!token || !id) return;
+                            const hint = (document.getElementById('debug-hint') as HTMLInputElement)?.value || '';
+                            toast.info(job.job_type === 'eval' ? 'AI Agent is fixing the inference code...' : 'AI Agent is fixing the training code...');
+                            try {
+                              const res = job.job_type === 'eval'
+                                ? await debugInferenceCode(token, id, job.model_name, hint)
+                                : await debugTrainingCode(token, id, job.model_name, hint);
+                              toast.success(res.message);
+                              setTimeout(() => window.location.reload(), 2000);
+                            } catch (err) {
+                              toast.error(err instanceof Error ? err.message : 'Debug failed');
+                            }
+                          }}
+                          className="px-4 py-2 rounded-xl bg-warning/20 text-warning text-sm font-semibold hover:bg-warning/30 cursor-pointer transition-all border border-warning/30"
+                        >
+                          {job.job_type === 'eval' ? 'Fix Inference & Retry' : 'Fix Training & Retry'}
+                        </button>
+                      </div>
+                    </details>
                   </div>
                 )}
               </div>

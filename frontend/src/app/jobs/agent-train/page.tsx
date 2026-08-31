@@ -26,6 +26,8 @@ function AgentTrainContent() {
   const [masksFile, setMasksFile] = useState<File | null>(null);
   const [training, setTraining] = useState(false);
   const [trainingStatus, setTrainingStatus] = useState('');
+  const [epochs, setEpochs] = useState('10');
+  const [lr, setLr] = useState('0.0001');
   const imagesRef = useRef<HTMLInputElement>(null);
   const masksRef = useRef<HTMLInputElement>(null);
 
@@ -62,7 +64,12 @@ function AgentTrainContent() {
 
       // Step 3: Create finetune job and start
       setTrainingStatus('Starting training on GPU server...');
-      const job = await createFinetuneJob(token, { model_name: codeRes.model_name, name: jobName.trim() });
+      const job = await createFinetuneJob(token, {
+        model_name: codeRes.model_name,
+        name: jobName.trim(),
+        ...(epochs ? { epochs: parseInt(epochs) } : {}),
+        ...(lr ? { lr: parseFloat(lr) } : {}),
+      });
       await runAgentTrain(token, job.id);
 
       toast.success('Training started! Redirecting to job page...');
@@ -213,6 +220,32 @@ function AgentTrainContent() {
                 >
                   Edge (_mask.png)
                 </button>
+              </div>
+            </div>
+
+            {/* Training Settings */}
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block text-xs font-semibold text-foreground/70 mb-2 uppercase tracking-wider">Epochs</label>
+                <input
+                  type="number"
+                  value={epochs}
+                  onChange={(e) => setEpochs(e.target.value)}
+                  disabled={training}
+                  placeholder="10"
+                  className="w-full px-3.5 py-2.5 rounded-xl bg-card/60 border border-border/50 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary/50 text-foreground text-sm transition-all"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-foreground/70 mb-2 uppercase tracking-wider">Learning Rate</label>
+                <input
+                  type="text"
+                  value={lr}
+                  onChange={(e) => setLr(e.target.value)}
+                  disabled={training}
+                  placeholder="0.0001"
+                  className="w-full px-3.5 py-2.5 rounded-xl bg-card/60 border border-border/50 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary/50 text-foreground text-sm transition-all"
+                />
               </div>
             </div>
 
