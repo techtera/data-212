@@ -5,7 +5,7 @@ from pydantic import BaseModel, Field
 
 from .config import settings
 from .db import execute, fetch_all, fetch_one
-from .gcs import mint_signed_put_url
+from .gcs import mint_signed_put_url, _get_bucket
 
 router = APIRouter(prefix="/admin", tags=["admin"])
 
@@ -123,9 +123,20 @@ async def list_admin_models(x_admin_key: str = Header(...)):
 
 @router.delete("/models/{model_name}")
 async def delete_model(model_name: str, x_admin_key: str = Header(...)):
-    """Remove a model from the platform."""
+    """Remove a model from the platform and delete files from GCS."""
     _check_admin_key(x_admin_key)
-    result = await execute("DELETE FROM platform_models WHERE model_name = $1", model_name)
-    if result == "DELETE 0":
+
+    row = await fetch_one("SELECT * FROM platform_models WHERE model_name = $1", model_name)
+    if not row:
         raise HTTPException(status_code=404, detail="Model not found")
-    return {"message": f"Model '{model_name}' deleted"}
+
+    bucket = _get_bucket()
+    for field in ("load_path", "inference_script", "finetune_script", "usr_inference_script"):
+        gcs_path = row[field]
+        if gcs_path and not gcs_path.startswith("gs://"):
+            blob = bucket.blob(gcs_path)
+            if blob.exists():
+                blob.delete()
+
+    await execute("DELETE FROM platform_models WHERE model_name = $1", model_name)
+    return {"message": f"Model '{model_name}' deleted from DB and GCS"}
