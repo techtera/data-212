@@ -15,6 +15,7 @@ from .jobs import router as jobs_router
 from .models import router as models_router
 from .research import router as research_router
 from .uploads import router as uploads_router
+from .admin import router as admin_router
 
 logging.basicConfig(
     level=logging.INFO,
@@ -58,6 +59,7 @@ app.include_router(jobs_router)
 app.include_router(models_router)
 app.include_router(research_router)
 app.include_router(uploads_router)
+app.include_router(admin_router)
 
 
 @app.get("/health", tags=["health"])

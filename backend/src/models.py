@@ -8,7 +8,7 @@ from fastapi import APIRouter, Depends
 from pydantic import BaseModel
 
 from .auth import require_auth
-from .db import fetch_all
+from .db import fetch_all, fetch_one
 from .gcs import mint_signed_get_url
 
 router = APIRouter(prefix="/models", tags=["models"])
@@ -39,11 +39,45 @@ def get_model_by_name(model_name: str) -> dict | None:
     return None
 
 
+async def _get_platform_models() -> list[dict]:
+    """Load admin-registered models from platform_models DB table."""
+    rows = await fetch_all("SELECT * FROM platform_models ORDER BY created_at DESC")
+    bucket = f"gs://terafac-datasets"
+    return [
+        {
+            "model_name": r["model_name"],
+            "category": r["category"],
+            "load_path": f"{bucket}/{r['load_path']}" if r["load_path"] and not r["load_path"].startswith("gs://") else r["load_path"],
+            "inference_script": f"{bucket}/{r['inference_script']}" if r["inference_script"] and not r["inference_script"].startswith("gs://") else r["inference_script"],
+            "finetune_script": f"{bucket}/{r['finetune_script']}" if r["finetune_script"] and not r["finetune_script"].startswith("gs://") else r["finetune_script"],
+            "usr_inference_script": f"{bucket}/{r['usr_inference_script']}" if r["usr_inference_script"] and not r["usr_inference_script"].startswith("gs://") else r["usr_inference_script"],
+            "save_path": "",
+            "user_id": "",
+            "is_agent": False,
+        }
+        for r in rows
+    ]
+
+
 async def get_model_by_name_async(model_name: str, user_id: str = "") -> dict | None:
     """Check models.json first, then user_models DB table."""
     result = get_model_by_name(model_name)
     if result:
         return result
+    # Check platform_models (admin-registered)
+    pm = await fetch_one("SELECT * FROM platform_models WHERE model_name = $1", model_name)
+    if pm:
+        bucket = "gs://terafac-datasets"
+        return {
+            "model_name": pm["model_name"],
+            "category": pm["category"],
+            "load_path": f"{bucket}/{pm['load_path']}" if pm["load_path"] and not pm["load_path"].startswith("gs://") else pm["load_path"],
+            "inference_script": f"{bucket}/{pm['inference_script']}" if pm["inference_script"] and not pm["inference_script"].startswith("gs://") else pm["inference_script"],
+            "finetune_script": f"{bucket}/{pm['finetune_script']}" if pm["finetune_script"] and not pm["finetune_script"].startswith("gs://") else pm["finetune_script"],
+            "usr_inference_script": f"{bucket}/{pm['usr_inference_script']}" if pm["usr_inference_script"] and not pm["usr_inference_script"].startswith("gs://") else pm["usr_inference_script"],
+            "save_path": "",
+            "user_id": "",
+        }
     if user_id:
         from .db import fetch_one as _fetch_one
         um = await _fetch_one(
@@ -77,6 +111,9 @@ async def list_models(user_id: UUID = Depends(require_auth)):
         m for m in all_models
         if m["user_id"] == "" or m["user_id"] == str(user_id)
     ]
+
+    platform_models = await _get_platform_models()
+    visible.extend(platform_models)
 
     user_models = await fetch_all(
         "SELECT * FROM user_models WHERE user_id = $1 ORDER BY created_at DESC", user_id

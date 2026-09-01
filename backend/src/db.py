@@ -66,6 +66,19 @@ CREATE INDEX IF NOT EXISTS idx_sessions_user_id ON sessions(user_id);
 CREATE INDEX IF NOT EXISTS idx_jobs_owner_id ON jobs(owner_id);
 CREATE INDEX IF NOT EXISTS idx_jobs_status ON jobs(status);
 CREATE INDEX IF NOT EXISTS idx_user_models_user_id ON user_models(user_id);
+
+CREATE TABLE IF NOT EXISTS platform_models (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    model_name VARCHAR(128) UNIQUE NOT NULL,
+    category VARCHAR(32) NOT NULL,
+    load_path VARCHAR(512) NOT NULL,
+    inference_script VARCHAR(512) NOT NULL,
+    finetune_script VARCHAR(512) NOT NULL,
+    usr_inference_script VARCHAR(512) NOT NULL,
+    default_epochs INT DEFAULT 10,
+    default_lr FLOAT DEFAULT 0.0001,
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
 """
 
 

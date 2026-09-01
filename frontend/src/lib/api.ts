@@ -245,3 +245,65 @@ export function getDownload(token: string, jobId: string) {
     token
   );
 }
+
+// Admin
+export interface AdminModel {
+  model_name: string;
+  category: string;
+  load_path: string;
+  inference_script: string;
+  finetune_script: string;
+  usr_inference_script: string;
+  default_epochs: number;
+  default_lr: number;
+}
+
+function adminRequest<T>(path: string, options: RequestInit = {}, adminKey: string): Promise<T> {
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+    'X-Admin-Key': adminKey,
+    ...(options.headers as Record<string, string>),
+  };
+  return fetch(`${BASE_URL}${path}`, { ...options, headers }).then(async (res) => {
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}));
+      throw new Error(body.detail || `Request failed: ${res.status}`);
+    }
+    return res.json();
+  });
+}
+
+export function adminSignModelUploads(adminKey: string, modelName: string) {
+  return adminRequest<{
+    checkpoint_url: string;
+    inference_url: string;
+    finetune_url: string;
+    usr_inference_url: string;
+    gcs_paths: Record<string, string>;
+  }>('/admin/models/sign', {
+    method: 'POST',
+    body: JSON.stringify({ model_name: modelName }),
+  }, adminKey);
+}
+
+export function adminRegisterModel(adminKey: string, data: {
+  model_name: string; category: string;
+  load_path: string; inference_script: string;
+  finetune_script: string; usr_inference_script: string;
+  default_epochs: number; default_lr: number;
+}) {
+  return adminRequest<AdminModel>('/admin/models/register', {
+    method: 'POST',
+    body: JSON.stringify(data),
+  }, adminKey);
+}
+
+export function adminListModels(adminKey: string) {
+  return adminRequest<AdminModel[]>('/admin/models', {}, adminKey);
+}
+
+export function adminDeleteModel(adminKey: string, modelName: string) {
+  return adminRequest<{ message: string }>(`/admin/models/${encodeURIComponent(modelName)}`, {
+    method: 'DELETE',
+  }, adminKey);
+}
