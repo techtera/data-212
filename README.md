@@ -25,7 +25,7 @@ cp .env.example .env.local     # Edit if needed
 npm run dev
 ```
 
-Open http://localhost:3100 — register an account and start using the platform.
+For local development, open http://localhost:3100. For the deployed platform, go to https://frontend-dun-two-95.vercel.app/login.
 
 ## Environment Setup
 
