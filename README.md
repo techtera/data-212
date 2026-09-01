@@ -86,115 +86,14 @@ Frontend (Next.js 16)  <-->  Backend (FastAPI)  <-->  Neon DB (Postgres)
 - Per-user GCS paths (no data collision)
 - Apple HIG-inspired dark theme UI
 
-## CLI Usage
+## CLI Usage (PowerShell)
 
-### Login
-```bash
-TOKEN=$(curl -s -X POST http://localhost:8000/auth/login \
-  -H "Content-Type: application/json" \
-  -d '{"username":"myuser","password":"mypass"}' | jq -r .token)
-```
-
-### Run Inference
-```bash
-# Get upload URL
-URLS=$(curl -s -X POST http://localhost:8000/uploads/sign \
-  -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
-  -d '{"job_name":"my-job"}')
-
-# Upload images
-curl -X PUT "$(echo $URLS | jq -r .images_upload_url)" \
-  -H "Content-Type: application/zip" --data-binary @images.zip
-
-# Create + run
-JOB_ID=$(curl -s -X POST http://localhost:8000/jobs/eval \
-  -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
-  -d '{"model_name":"YOLO11L-MASKING-MODEL","name":"my-job"}' | jq -r .id)
-
-curl -X POST "http://localhost:8000/jobs/$JOB_ID/run-eval" \
-  -H "Authorization: Bearer $TOKEN"
-
-# Poll results
-curl -s "http://localhost:8000/jobs/$JOB_ID/results" -H "Authorization: Bearer $TOKEN"
-```
-
-### Run Fine-tuning
-```bash
-# Upload masks too
-curl -X PUT "$(echo $URLS | jq -r .masks_upload_url)" \
-  -H "Content-Type: application/zip" --data-binary @masks.zip
-
-JOB_ID=$(curl -s -X POST http://localhost:8000/jobs/finetune \
-  -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
-  -d '{"model_name":"UNETPLUSPLUS-MODEL","name":"my-job"}' | jq -r .id)
-
-curl -X POST "http://localhost:8000/jobs/$JOB_ID/run-finetune" \
-  -H "Authorization: Bearer $TOKEN"
-```
-
-### AI Agent Training (CLI)
-```bash
-# 1. Research
-REPORT=$(curl -s -X POST http://localhost:8000/research \
-  -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
-  -d '{"prompt":"Need edge detection for weld seams on steel pipes"}' | jq -r .report)
-
-# 2. Generate code
-MODEL=$(curl -s -X POST http://localhost:8000/coding/generate-train \
-  -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
-  -d "{\"report\":\"$REPORT\",\"job_name\":\"weld-model\",\"mask_type\":\"edge\"}" | jq -r .model_name)
-
-# 3. Upload data + start agent training
-# ... upload images.zip + masks.zip as above ...
-JOB_ID=$(curl -s -X POST http://localhost:8000/jobs/finetune \
-  -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
-  -d "{\"model_name\":\"$MODEL\",\"name\":\"weld-model\"}" | jq -r .id)
-
-curl -X POST "http://localhost:8000/jobs/$JOB_ID/run-agent-train" \
-  -H "Authorization: Bearer $TOKEN"
-
-# 4. If fails, debug with AI
-curl -X POST http://localhost:8000/coding/debug \
-  -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
-  -d "{\"job_id\":\"$JOB_ID\",\"model_name\":\"$MODEL\",\"user_message\":\"masks are _mask.png format\"}"
-```
-
-### AI Agent Inference (CLI)
-```bash
-# 1. Generate inference code for an agent-trained model
-curl -s -X POST http://localhost:8000/coding/generate-inference \
-  -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
-  -d '{"model_name":"weld-model_agent_v_1"}'
-
-# 2. Upload images + create eval job
-URLS=$(curl -s -X POST http://localhost:8000/uploads/sign \
-  -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
-  -d '{"job_name":"weld-infer"}')
-
-curl -X PUT "$(echo $URLS | jq -r .images_upload_url)" \
-  -H "Content-Type: application/zip" --data-binary @images.zip
-
-JOB_ID=$(curl -s -X POST http://localhost:8000/jobs/eval \
-  -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
-  -d '{"model_name":"weld-model_agent_v_1","name":"weld-infer"}' | jq -r .id)
-
-# 3. Run agent inference
-curl -X POST "http://localhost:8000/jobs/$JOB_ID/run-agent-inference" \
-  -H "Authorization: Bearer $TOKEN"
-
-# 4. If fails, debug with AI
-curl -X POST http://localhost:8000/coding/debug-inference \
-  -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
-  -d "{\"job_id\":\"$JOB_ID\",\"model_name\":\"weld-model_agent_v_1\"}"
-```
-
-## Deployed Platform CLI (PowerShell)
-
-Commands for testing against the deployed platform (Vercel + Render). Run each section step by step.
+All CLI commands below target the deployed platform. For local development, replace `$BACKEND` with `http://localhost:8000`.
 
 ### Setup
 ```powershell
 $BACKEND = "https://terafac-backend.onrender.com"
+# For local: $BACKEND = "http://localhost:8000"
 
 # Register (first time only)
 Invoke-RestMethod -Uri "$BACKEND/auth/register" -Method POST -ContentType "application/json" -Body '{"username":"cliuser","email":"cli@test.com","password":"test1234"}'
@@ -206,81 +105,90 @@ $TOKEN = $login.token
 # Health check
 Invoke-RestMethod -Uri "$BACKEND/health"
 
-# List models
+# List all models
 $models = Invoke-RestMethod -Uri "$BACKEND/models" -Headers @{Authorization="Bearer $TOKEN"}
 $models | ForEach-Object { $_.model_name }
 ```
 
 ### Run Inference
 ```powershell
-# 1. Get signed upload URLs
+# 1. List available models
+$models = Invoke-RestMethod -Uri "$BACKEND/models" -Headers @{Authorization="Bearer $TOKEN"}
+$models | Where-Object { $_.is_agent -ne $true } | Select-Object model_name, category
+
+# 2. Get signed upload URLs
 $urls = Invoke-RestMethod -Uri "$BACKEND/uploads/sign" -Method POST -ContentType "application/json" -Headers @{Authorization="Bearer $TOKEN"} -Body '{"job_name":"cli-infer-test"}'
 
-# 2. Upload images
+# 3. Upload images
 Invoke-WebRequest -Uri $urls.images_upload_url -Method PUT -ContentType "application/zip" -InFile "objectimages.zip"
 
-# 3. Create eval job (choose: YOLO11L-MASKING-MODEL, VGGT-SEGFORMER, UNETPLUSPLUS-MODEL, VGGT-UNETPP)
+# 4. Create eval job (choose from list above)
 $job = Invoke-RestMethod -Uri "$BACKEND/jobs/eval" -Method POST -ContentType "application/json" -Headers @{Authorization="Bearer $TOKEN"} -Body '{"model_name":"YOLO11L-MASKING-MODEL","name":"cli-infer-test"}'
 $JOB_ID = $job.id
 
-# 4. Start inference
+# 5. Start inference
 Invoke-RestMethod -Uri "$BACKEND/jobs/$JOB_ID/run-eval" -Method POST -Headers @{Authorization="Bearer $TOKEN"}
 
-# 5. Poll status (run repeatedly until status = "done")
+# 6. Poll status (run repeatedly until status = "done")
 $jobs = Invoke-RestMethod -Uri "$BACKEND/jobs" -Headers @{Authorization="Bearer $TOKEN"}
 $jobs | Where-Object { $_.id -eq $JOB_ID } | Select-Object name, status
 
-# 6. Get results
-Invoke-RestMethod -Uri "$BACKEND/jobs/$JOB_ID/results" -Headers @{Authorization="Bearer $TOKEN"}
+# 7. Save results to file (signed URLs are too long for terminal)
+$results = Invoke-RestMethod -Uri "$BACKEND/jobs/$JOB_ID/results" -Headers @{Authorization="Bearer $TOKEN"}
+$results | ConvertTo-Json -Depth 10 | Out-File "infer-results.json"
+Write-Host "Predictions: $($results.prediction_urls.Count) images"
 ```
 
 ### Run Fine-tuning
 ```powershell
-# 1. Upload images + masks
+# 1. List available models
+$models = Invoke-RestMethod -Uri "$BACKEND/models" -Headers @{Authorization="Bearer $TOKEN"}
+$models | Where-Object { $_.is_agent -ne $true } | Select-Object model_name, category
+
+# 2. Upload images + masks
 $urls = Invoke-RestMethod -Uri "$BACKEND/uploads/sign" -Method POST -ContentType "application/json" -Headers @{Authorization="Bearer $TOKEN"} -Body '{"job_name":"cli-ft-test"}'
-Invoke-WebRequest -Uri $urls.images_upload_url -Method PUT -ContentType "application/zip" -InFile "edgeimages.zip" -UseBasicParsing
-Invoke-WebRequest -Uri $urls.masks_upload_url -Method PUT -ContentType "application/zip" -InFile "edgemasks.zip" -UseBasicParsing
+Invoke-WebRequest -Uri $urls.images_upload_url -Method PUT -ContentType "application/zip" -InFile "objectimages.zip" -UseBasicParsing
+Invoke-WebRequest -Uri $urls.masks_upload_url -Method PUT -ContentType "application/zip" -InFile "objectmasks.zip" -UseBasicParsing
 
-# 2. Create finetune job
+# 3. Create finetune job (choose from list above)
 #    Default params: YOLO(60ep,lr=1e-4) UNETPP(40ep,lr_enc=1e-5,lr_dec=5e-5) VGGT-SEG(2ep,lr=1e-4) VGGT-UNETPP(2ep,lr=3e-4)
-#    Option A: defaults
-$job = Invoke-RestMethod -Uri "$BACKEND/jobs/finetune" -Method POST -ContentType "application/json" -Headers @{Authorization="Bearer $TOKEN"} -Body '{"model_name":"UNETPLUSPLUS-MODEL","name":"cli-ft-test"}'
-#    Option B: custom epochs + lr
 $job = Invoke-RestMethod -Uri "$BACKEND/jobs/finetune" -Method POST -ContentType "application/json" -Headers @{Authorization="Bearer $TOKEN"} -Body '{"model_name":"YOLO11L-MASKING-MODEL","name":"cli-ft-test","epochs":10,"lr":0.0005}'
-#    Option C: UNet++ encoder/decoder lr
-$job = Invoke-RestMethod -Uri "$BACKEND/jobs/finetune" -Method POST -ContentType "application/json" -Headers @{Authorization="Bearer $TOKEN"} -Body '{"model_name":"UNETPLUSPLUS-MODEL","name":"cli-ft-test","epochs":5,"lr_encoder":0.00002,"lr_decoder":0.0001}'
-
-# 3. Start training
 $JOB_ID = $job.id
+
+# 4. Start training
 Invoke-RestMethod -Uri "$BACKEND/jobs/$JOB_ID/run-finetune" -Method POST -Headers @{Authorization="Bearer $TOKEN"}
 
-# 4. Poll status
+# 5. Poll status (run repeatedly until status = "done" or "error")
 $jobs = Invoke-RestMethod -Uri "$BACKEND/jobs" -Headers @{Authorization="Bearer $TOKEN"}
-$jobs | Where-Object { $_.id -eq $JOB_ID } | Select-Object name, status, error_message
+$jobs | Where-Object { $_.id -eq $JOB_ID } | Select-Object name, status
 
-# 5. Save results + download checkpoint
+# 6. Save results to file
 $results = Invoke-RestMethod -Uri "$BACKEND/jobs/$JOB_ID/results" -Headers @{Authorization="Bearer $TOKEN"}
-$results | ConvertTo-Json -Depth 10 | Out-File "results.json"
+$results | ConvertTo-Json -Depth 10 | Out-File "ft-results.json"
+Write-Host "Mean IoU: $($results.mean_iou) | Dice: $($results.dice_score) | Pixel Acc: $($results.pixel_accuracy)"
 
+# 7. Download checkpoint (URL expires in 15 min)
 $download = Invoke-RestMethod -Uri "$BACKEND/jobs/$JOB_ID/download" -Headers @{Authorization="Bearer $TOKEN"}
 Invoke-WebRequest -Uri $download.checkpoint_url -OutFile "best_checkpoint.pt" -UseBasicParsing
 ```
 
-### AI Agent Training (PowerShell)
+### AI Agent Training
 ```powershell
-# 1. Research — AI suggests architecture
+# 1. List existing agent models
+$models = Invoke-RestMethod -Uri "$BACKEND/models" -Headers @{Authorization="Bearer $TOKEN"}
+$models | Where-Object { $_.is_agent -eq $true } | Select-Object model_name, category, load_path
+
+# 2. Research — AI suggests architecture
 $research = Invoke-RestMethod -Uri "$BACKEND/research" -Method POST -ContentType "application/json" -Headers @{Authorization="Bearer $TOKEN"} -Body '{"prompt":"Need edge detection for weld seams on steel pipes"}'
 $REPORT = $research.report
-Write-Host "Report: $($REPORT.Length) chars"
 Write-Host $REPORT
 
-# 2. Generate training code
+# 3. Generate training code
 $body = @{report=$REPORT.Substring(0,2000); job_name="cli-agent"; mask_type="edge"} | ConvertTo-Json
 $code = Invoke-RestMethod -Uri "$BACKEND/coding/generate-train" -Method POST -ContentType "application/json" -Headers @{Authorization="Bearer $TOKEN"} -Body $body
 $MODEL = $code.model_name
-Write-Host "Model: $MODEL"
 
-# 3. Upload data
+# 4. Upload data
 $urls = Invoke-RestMethod -Uri "$BACKEND/uploads/sign" -Method POST -ContentType "application/json" -Headers @{Authorization="Bearer $TOKEN"} -Body '{"job_name":"cli-agent"}'
 Invoke-WebRequest -Uri $urls.images_upload_url -Method PUT -ContentType "application/zip" -InFile "edgeimages.zip"
 Invoke-WebRequest -Uri $urls.masks_upload_url -Method PUT -ContentType "application/zip" -InFile "edgemasks.zip"
@@ -291,30 +199,27 @@ $job = Invoke-RestMethod -Uri "$BACKEND/jobs/finetune" -Method POST -ContentType
 $JOB_ID = $job.id
 Invoke-RestMethod -Uri "$BACKEND/jobs/$JOB_ID/run-agent-train" -Method POST -Headers @{Authorization="Bearer $TOKEN"}
 
-# 5. Poll status (auto-debug runs in background if errors occur)
+# 5. Poll status (run repeatedly until status = "done")
 $jobs = Invoke-RestMethod -Uri "$BACKEND/jobs" -Headers @{Authorization="Bearer $TOKEN"}
-$jobs | Where-Object { $_.id -eq $JOB_ID } | Select-Object name, status, error_message
+$jobs | Where-Object { $_.id -eq $JOB_ID } | Select-Object name, status
 
-# 6. Manual debug if needed (after auto-retry exhausted)
-$debugBody = @{job_id=$JOB_ID; model_name=$MODEL; user_message="masks are _mask.png format"} | ConvertTo-Json
-Invoke-RestMethod -Uri "$BACKEND/coding/debug" -Method POST -ContentType "application/json" -Headers @{Authorization="Bearer $TOKEN"} -Body $debugBody
-
-# 7. Get results
+# 6. Save results to file
 $results = Invoke-RestMethod -Uri "$BACKEND/jobs/$JOB_ID/results" -Headers @{Authorization="Bearer $TOKEN"}
 $results | ConvertTo-Json -Depth 10 | Out-File "agent-train-results.json"
+Write-Host "Mean IoU: $($results.mean_iou) | Dice: $($results.dice_score) | Pixel Acc: $($results.pixel_accuracy)"
 ```
 
-### AI Agent Inference (PowerShell)
+### AI Agent Inference
 ```powershell
-# 1. List agent models ready for inference (must have checkpoint)
+# 1. List agent models ready for inference (must have checkpoint from completed training)
 $models = Invoke-RestMethod -Uri "$BACKEND/models" -Headers @{Authorization="Bearer $TOKEN"}
 $agentModels = $models | Where-Object { $_.is_agent -eq $true -and $_.load_path -ne "" }
 $agentModels | ForEach-Object { Write-Host "$($_.model_name) ($($_.category))" }
 
-# 2. Pick model
+# 2. Pick model from list above
 $MODEL = "agent-train_agent_v_1"
 
-# 3. Generate inference code
+# 3. Generate inference code — AI writes script based on training code
 $body = @{model_name=$MODEL} | ConvertTo-Json
 Invoke-RestMethod -Uri "$BACKEND/coding/generate-inference" -Method POST -ContentType "application/json" -Headers @{Authorization="Bearer $TOKEN"} -Body $body
 
@@ -327,17 +232,14 @@ $job = Invoke-RestMethod -Uri "$BACKEND/jobs/eval" -Method POST -ContentType "ap
 $JOB_ID = $job.id
 Invoke-RestMethod -Uri "$BACKEND/jobs/$JOB_ID/run-agent-inference" -Method POST -Headers @{Authorization="Bearer $TOKEN"}
 
-# 6. Poll status
+# 6. Poll status (run repeatedly until status = "done")
 $jobs = Invoke-RestMethod -Uri "$BACKEND/jobs" -Headers @{Authorization="Bearer $TOKEN"}
-$jobs | Where-Object { $_.id -eq $JOB_ID } | Select-Object name, status, error_message
+$jobs | Where-Object { $_.id -eq $JOB_ID } | Select-Object name, status
 
-# 7. Manual debug if needed (after auto-retry exhausted)
-$debugBody = @{job_id=$JOB_ID; model_name=$MODEL; user_message=""} | ConvertTo-Json
-Invoke-RestMethod -Uri "$BACKEND/coding/debug-inference" -Method POST -ContentType "application/json" -Headers @{Authorization="Bearer $TOKEN"} -Body $debugBody
-
-# 8. Get results
+# 7. Save results to file
 $results = Invoke-RestMethod -Uri "$BACKEND/jobs/$JOB_ID/results" -Headers @{Authorization="Bearer $TOKEN"}
 $results | ConvertTo-Json -Depth 10 | Out-File "agent-infer-results.json"
+Write-Host "Predictions: $($results.prediction_urls.Count) images"
 ```
 
 ## AI Agent Sample Prompts

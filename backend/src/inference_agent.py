@@ -237,7 +237,7 @@ async def _poll_agent_inference(job_id: str, job_dir: str, bucket: str, job_name
                         gcs_predictions = [f"inference/{owner_id}/{job_name}/predictions/{f}" for f in pred_list.split("\n") if f.strip()]
 
                     await execute(
-                        """UPDATE jobs SET status = 'done', predictions = $1::jsonb, updated_at = NOW() WHERE id = $2""",
+                        """UPDATE jobs SET status = 'done', error_message = NULL, predictions = $1::jsonb, updated_at = NOW() WHERE id = $2""",
                         json.dumps(gcs_predictions), job_id,
                     )
 

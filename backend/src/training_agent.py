@@ -261,7 +261,7 @@ async def _poll_agent_job(job_id: str, job_dir: str, bucket: str, job_name: str,
                     }
 
                     await execute(
-                        """UPDATE jobs SET status = 'done', mean_iou = $1, dice_score = $2, pixel_accuracy = $3,
+                        """UPDATE jobs SET status = 'done', error_message = NULL, mean_iou = $1, dice_score = $2, pixel_accuracy = $3,
                            predictions = $4::jsonb, artifacts = $5::jsonb, updated_at = NOW() WHERE id = $6""",
                         results.get("mean_iou", 0), results.get("dice_score", 0), results.get("pixel_accuracy", 0),
                         json.dumps(gcs_predictions), json.dumps(artifacts), job_id,
