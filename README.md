@@ -133,10 +133,13 @@ Invoke-RestMethod -Uri "$BACKEND/jobs/$JOB_ID/run-eval" -Method POST -Headers @{
 $jobs = Invoke-RestMethod -Uri "$BACKEND/jobs" -Headers @{Authorization="Bearer $TOKEN"}
 $jobs | Where-Object { $_.id -eq $JOB_ID } | Select-Object name, status
 
-# 7. Save results to file (signed URLs are too long for terminal)
+# 7. Download prediction images
 $results = Invoke-RestMethod -Uri "$BACKEND/jobs/$JOB_ID/results" -Headers @{Authorization="Bearer $TOKEN"}
-$results | ConvertTo-Json -Depth 10 | Out-File "infer-results.json"
-Write-Host "Predictions: $($results.prediction_urls.Count) images"
+New-Item -ItemType Directory -Force -Path "predictions" | Out-Null
+for ($i=0; $i -lt $results.prediction_urls.Count; $i++) {
+    Invoke-WebRequest -Uri $results.prediction_urls[$i] -OutFile "predictions/pred_$i.png" -UseBasicParsing
+}
+Write-Host "Downloaded $($results.prediction_urls.Count) predictions to predictions/"
 ```
 
 ### Run Fine-tuning
@@ -236,10 +239,40 @@ Invoke-RestMethod -Uri "$BACKEND/jobs/$JOB_ID/run-agent-inference" -Method POST 
 $jobs = Invoke-RestMethod -Uri "$BACKEND/jobs" -Headers @{Authorization="Bearer $TOKEN"}
 $jobs | Where-Object { $_.id -eq $JOB_ID } | Select-Object name, status
 
-# 7. Save results to file
+# 7. Download prediction images
 $results = Invoke-RestMethod -Uri "$BACKEND/jobs/$JOB_ID/results" -Headers @{Authorization="Bearer $TOKEN"}
-$results | ConvertTo-Json -Depth 10 | Out-File "agent-infer-results.json"
-Write-Host "Predictions: $($results.prediction_urls.Count) images"
+New-Item -ItemType Directory -Force -Path "agent-predictions" | Out-Null
+for ($i=0; $i -lt $results.prediction_urls.Count; $i++) {
+    Invoke-WebRequest -Uri $results.prediction_urls[$i] -OutFile "agent-predictions/pred_$i.png" -UseBasicParsing
+}
+Write-Host "Downloaded $($results.prediction_urls.Count) predictions to agent-predictions/"
+```
+
+### Utility — Browse Jobs & Download Results
+```powershell
+# List all jobs
+$jobs = Invoke-RestMethod -Uri "$BACKEND/jobs" -Headers @{Authorization="Bearer $TOKEN"}
+$jobs | Select-Object name, job_type, status, model_name, created_at | Format-Table
+
+# Pick a job by name
+$JOB_ID = ($jobs | Where-Object { $_.name -eq "cli-infer-test" }).id
+
+# Get results + metrics
+$results = Invoke-RestMethod -Uri "$BACKEND/jobs/$JOB_ID/results" -Headers @{Authorization="Bearer $TOKEN"}
+Write-Host "Status: $($results.status) | Mean IoU: $($results.mean_iou) | Dice: $($results.dice_score) | Pixel Acc: $($results.pixel_accuracy)"
+
+# Download prediction images
+New-Item -ItemType Directory -Force -Path "predictions" | Out-Null
+for ($i=0; $i -lt $results.prediction_urls.Count; $i++) {
+    Invoke-WebRequest -Uri $results.prediction_urls[$i] -OutFile "predictions/pred_$i.png" -UseBasicParsing
+}
+
+# Download checkpoint (finetune jobs only)
+$download = Invoke-RestMethod -Uri "$BACKEND/jobs/$JOB_ID/download" -Headers @{Authorization="Bearer $TOKEN"}
+Invoke-WebRequest -Uri $download.checkpoint_url -OutFile "best_checkpoint.pt" -UseBasicParsing
+
+# Logout
+Invoke-RestMethod -Uri "$BACKEND/auth/logout" -Method POST -Headers @{Authorization="Bearer $TOKEN"}
 ```
 
 ## AI Agent Sample Prompts
