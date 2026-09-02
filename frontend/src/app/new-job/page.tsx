@@ -18,6 +18,7 @@ import {
 import { toast } from 'sonner';
 import { Upload, FlaskConical, Wrench, Search } from 'lucide-react';
 import Link from 'next/link';
+import { filesToZipBlob, describeFiles, IMAGE_ACCEPT, MASK_ACCEPT } from '@/lib/zip-utils';
 import { ModelInfoCard } from '@/components/model-info-card';
 
 function NewJobContent() {
@@ -28,8 +29,8 @@ function NewJobContent() {
   const [models, setModels] = useState<Model[]>([]);
   const [category, setCategory] = useState<'object_mask' | 'edge_mask'>('object_mask');
   const [selectedModel, setSelectedModel] = useState('');
-  const [imagesFile, setImagesFile] = useState<File | null>(null);
-  const [masksFile, setMasksFile] = useState<File | null>(null);
+  const [imageFiles, setImageFiles] = useState<File[]>([]);
+  const [maskFiles, setMaskFiles] = useState<File[]>([]);
   const [progress, setProgress] = useState(0);
   const [step, setStep] = useState('');
   const [submitting, setSubmitting] = useState(false);
@@ -70,11 +71,11 @@ function NewJobContent() {
       toast.error('Please enter a job name');
       return;
     }
-    if (!imagesFile) {
-      toast.error('Please select images.zip');
+    if (imageFiles.length === 0) {
+      toast.error('Please select images (zip or individual files)');
       return;
     }
-    if (jobType === 'finetune' && !masksFile) {
+    if (jobType === 'finetune' && maskFiles.length === 0) {
       toast.error('Masks are required for fine-tuning');
       return;
     }
@@ -88,15 +89,18 @@ function NewJobContent() {
       setStep('Preparing upload...');
       const { images_upload_url, masks_upload_url } = await signUpload(token, jobName.trim());
 
-      // Step 2: Upload images
-      setStep('Uploading images to cloud storage...');
-      const progressMax = masksFile ? 50 : 90;
-      await uploadToSignedUrl(images_upload_url, imagesFile, (pct) => setProgress(Math.round(pct * progressMax / 100)));
+      // Step 2: Zip if needed + upload images
+      setStep(imageFiles.length > 1 ? 'Zipping & uploading images...' : 'Uploading images to cloud storage...');
+      const imagesZip = await filesToZipBlob(imageFiles);
+      const hasMasks = maskFiles.length > 0;
+      const progressMax = hasMasks ? 50 : 90;
+      await uploadToSignedUrl(images_upload_url, imagesZip, (pct) => setProgress(Math.round(pct * progressMax / 100)));
 
       // Step 3: Upload masks (if provided)
-      if (masksFile) {
-        setStep('Uploading masks to cloud storage...');
-        await uploadToSignedUrl(masks_upload_url, masksFile, (pct) => setProgress(50 + Math.round(pct * 40 / 100)));
+      if (hasMasks) {
+        setStep(maskFiles.length > 1 ? 'Zipping & uploading masks...' : 'Uploading masks to cloud storage...');
+        const masksZip = await filesToZipBlob(maskFiles);
+        await uploadToSignedUrl(masks_upload_url, masksZip, (pct) => setProgress(50 + Math.round(pct * 40 / 100)));
       }
 
       // Step 4: Create job
@@ -275,48 +279,50 @@ function NewJobContent() {
 
           {/* Images Upload */}
           <div>
-            <label className="block text-xs font-semibold text-foreground/70 mb-2 uppercase tracking-wider">Images (ZIP)</label>
+            <label className="block text-xs font-semibold text-foreground/70 mb-2 uppercase tracking-wider">Images (ZIP or individual files)</label>
             <div
               onClick={() => !submitting && imagesRef.current?.click()}
               onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); }}
-              onDrop={(e) => { e.preventDefault(); e.stopPropagation(); if (!submitting && e.dataTransfer.files[0]) setImagesFile(e.dataTransfer.files[0]); }}
+              onDrop={(e) => { e.preventDefault(); e.stopPropagation(); if (!submitting && e.dataTransfer.files.length) setImageFiles(Array.from(e.dataTransfer.files)); }}
               className={`border border-dashed border-border/50 rounded-xl p-5 text-center cursor-pointer hover:border-primary/40 hover:bg-primary/5 transition-all ${submitting ? 'opacity-50 pointer-events-none' : ''}`}
             >
               <Upload size={20} className="mx-auto mb-1 text-muted" />
               <p className="text-sm text-muted">
-                {imagesFile ? imagesFile.name : 'Click or drag images.zip here'}
+                {imageFiles.length > 0 ? describeFiles(imageFiles) : 'Click or drag images (.zip or .png/.jpg)'}
               </p>
             </div>
             <input
               ref={imagesRef}
               type="file"
-              accept=".zip"
+              accept={IMAGE_ACCEPT}
+              multiple
               className="hidden"
-              onChange={(e) => setImagesFile(e.target.files?.[0] || null)}
+              onChange={(e) => setImageFiles(e.target.files ? Array.from(e.target.files) : [])}
             />
           </div>
 
           {/* Masks Upload (finetune only) */}
           {jobType === 'finetune' && (
           <div>
-            <label className="block text-xs font-semibold text-foreground/70 mb-2 uppercase tracking-wider">Masks (ZIP)</label>
+            <label className="block text-xs font-semibold text-foreground/70 mb-2 uppercase tracking-wider">Masks (ZIP or individual files)</label>
             <div
               onClick={() => !submitting && masksRef.current?.click()}
               onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); }}
-              onDrop={(e) => { e.preventDefault(); e.stopPropagation(); if (!submitting && e.dataTransfer.files[0]) setMasksFile(e.dataTransfer.files[0]); }}
+              onDrop={(e) => { e.preventDefault(); e.stopPropagation(); if (!submitting && e.dataTransfer.files.length) setMaskFiles(Array.from(e.dataTransfer.files)); }}
               className={`border border-dashed border-border/50 rounded-xl p-5 text-center cursor-pointer hover:border-primary/40 hover:bg-primary/5 transition-all ${submitting ? 'opacity-50 pointer-events-none' : ''}`}
             >
               <Upload size={20} className="mx-auto mb-1 text-muted" />
               <p className="text-sm text-muted">
-                {masksFile ? masksFile.name : 'Click or drag masks.zip here'}
+                {maskFiles.length > 0 ? describeFiles(maskFiles) : 'Click or drag masks (.zip, .png, or .txt)'}
               </p>
             </div>
             <input
               ref={masksRef}
               type="file"
-              accept=".zip"
+              accept={MASK_ACCEPT}
+              multiple
               className="hidden"
-              onChange={(e) => setMasksFile(e.target.files?.[0] || null)}
+              onChange={(e) => setMaskFiles(e.target.files ? Array.from(e.target.files) : [])}
             />
           </div>
           )}
@@ -392,7 +398,7 @@ function NewJobContent() {
           <div className="pt-2">
             <button
               onClick={() => handleSubmit(jobType)}
-              disabled={submitting || !jobName.trim() || (jobType === 'finetune' && !masksFile)}
+              disabled={submitting || !jobName.trim() || imageFiles.length === 0 || (jobType === 'finetune' && maskFiles.length === 0)}
               className="w-full flex items-center justify-center gap-2 py-3 px-4 rounded-xl bg-primary text-primary-foreground text-sm font-medium hover:brightness-110 transition-all disabled:opacity-40 cursor-pointer disabled:cursor-not-allowed shadow-sm shadow-primary/20"
             >
               {jobType === 'eval' ? <FlaskConical size={16} /> : <Wrench size={16} />}

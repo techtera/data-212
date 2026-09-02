@@ -17,6 +17,7 @@ import {
 import { toast } from 'sonner';
 import { ArrowLeft, FlaskConical, Upload, Rocket } from 'lucide-react';
 import Link from 'next/link';
+import { filesToZipBlob, describeFiles, IMAGE_ACCEPT } from '@/lib/zip-utils';
 
 function AgentInferenceContent() {
   const { token } = useAuth();
@@ -25,7 +26,7 @@ function AgentInferenceContent() {
   const [models, setModels] = useState<Model[]>([]);
   const [selectedModel, setSelectedModel] = useState('');
   const [jobName, setJobName] = useState('');
-  const [imagesFile, setImagesFile] = useState<File | null>(null);
+  const [imageFiles, setImageFiles] = useState<File[]>([]);
   const [running, setRunning] = useState(false);
   const [status, setStatus] = useState('');
   const imagesRef = useRef<HTMLInputElement>(null);
@@ -40,16 +41,17 @@ function AgentInferenceContent() {
   }, [token]);
 
   const handleRunInference = async () => {
-    if (!token || !selectedModel || !jobName.trim() || !imagesFile) return;
+    if (!token || !selectedModel || !jobName.trim() || imageFiles.length === 0) return;
     setRunning(true);
 
     try {
       setStatus('AI is writing inference code...');
       await generateInferenceCode(token, '', selectedModel);
 
-      setStatus('Uploading images...');
+      setStatus(imageFiles.length > 1 ? 'Zipping & uploading images...' : 'Uploading images...');
       const urls = await signUpload(token, jobName.trim());
-      await uploadToSignedUrl(urls.images_upload_url, imagesFile);
+      const imagesZip = await filesToZipBlob(imageFiles);
+      await uploadToSignedUrl(urls.images_upload_url, imagesZip);
 
       setStatus('Starting inference on GPU server...');
       const job = await createEvalJob(token, { model_name: selectedModel, name: jobName.trim() });
@@ -127,23 +129,23 @@ function AgentInferenceContent() {
 
             {/* Upload Images */}
             <div>
-              <label className="block text-xs font-semibold text-foreground/70 mb-2 uppercase tracking-wider">Images (ZIP)</label>
+              <label className="block text-xs font-semibold text-foreground/70 mb-2 uppercase tracking-wider">Images (ZIP or individual files)</label>
               <div
                 onClick={() => !running && imagesRef.current?.click()}
                 onDragOver={(e) => { e.preventDefault(); }}
-                onDrop={(e) => { e.preventDefault(); if (!running && e.dataTransfer.files[0]) setImagesFile(e.dataTransfer.files[0]); }}
+                onDrop={(e) => { e.preventDefault(); if (!running && e.dataTransfer.files.length) setImageFiles(Array.from(e.dataTransfer.files)); }}
                 className={`border border-dashed border-border/50 rounded-xl p-5 text-center cursor-pointer hover:border-accent/40 hover:bg-accent/5 transition-all ${running ? 'opacity-50 pointer-events-none' : ''}`}
               >
                 <Upload size={20} className="mx-auto mb-1 text-muted" />
-                <p className="text-sm text-muted">{imagesFile ? imagesFile.name : 'Click or drag images.zip'}</p>
+                <p className="text-sm text-muted">{imageFiles.length > 0 ? describeFiles(imageFiles) : 'Click or drag images (.zip or .png/.jpg)'}</p>
               </div>
-              <input ref={imagesRef} type="file" accept=".zip" className="hidden" onChange={(e) => setImagesFile(e.target.files?.[0] || null)} />
+              <input ref={imagesRef} type="file" accept={IMAGE_ACCEPT} multiple className="hidden" onChange={(e) => setImageFiles(e.target.files ? Array.from(e.target.files) : [])} />
             </div>
 
             {/* Run Button */}
             <button
               onClick={handleRunInference}
-              disabled={running || !selectedModel || !jobName.trim() || !imagesFile}
+              disabled={running || !selectedModel || !jobName.trim() || imageFiles.length === 0}
               className="w-full py-3.5 rounded-xl bg-gradient-to-r from-accent to-primary text-white text-sm font-bold hover:brightness-110 disabled:opacity-40 cursor-pointer disabled:cursor-not-allowed transition-all shadow-lg shadow-accent/20 flex items-center justify-center gap-2"
             >
               <Rocket size={16} />

@@ -9,6 +9,7 @@ import { signUpload, uploadToSignedUrl, runResearch, generateTrainingCode, creat
 import { toast } from 'sonner';
 import { ArrowLeft, Search, Upload, Rocket } from 'lucide-react';
 import Link from 'next/link';
+import { filesToZipBlob, describeFiles, IMAGE_ACCEPT, MASK_ACCEPT } from '@/lib/zip-utils';
 
 type Step = 'research' | 'upload' | 'training';
 
@@ -22,8 +23,8 @@ function AgentTrainContent() {
   const [report, setReport] = useState('');
   const [jobName, setJobName] = useState('');
   const [maskType, setMaskType] = useState<'object' | 'edge'>('object');
-  const [imagesFile, setImagesFile] = useState<File | null>(null);
-  const [masksFile, setMasksFile] = useState<File | null>(null);
+  const [imageFiles, setImageFiles] = useState<File[]>([]);
+  const [maskFiles, setMaskFiles] = useState<File[]>([]);
   const [training, setTraining] = useState(false);
   const [trainingStatus, setTrainingStatus] = useState('');
   const [epochs, setEpochs] = useState('10');
@@ -46,7 +47,7 @@ function AgentTrainContent() {
   };
 
   const handleStartTraining = async () => {
-    if (!token || !jobName.trim() || !imagesFile || !masksFile) return;
+    if (!token || !jobName.trim() || imageFiles.length === 0 || maskFiles.length === 0) return;
     setTraining(true);
 
     try {
@@ -55,12 +56,14 @@ function AgentTrainContent() {
       const codeRes = await generateTrainingCode(token, report, jobName.trim(), maskType);
 
       // Step 2: Upload data
-      setTrainingStatus('Uploading images...');
+      setTrainingStatus(imageFiles.length > 1 ? 'Zipping & uploading images...' : 'Uploading images...');
       const urls = await signUpload(token, jobName.trim());
-      await uploadToSignedUrl(urls.images_upload_url, imagesFile);
+      const imagesZip = await filesToZipBlob(imageFiles);
+      await uploadToSignedUrl(urls.images_upload_url, imagesZip);
 
-      setTrainingStatus('Uploading masks...');
-      await uploadToSignedUrl(urls.masks_upload_url, masksFile);
+      setTrainingStatus(maskFiles.length > 1 ? 'Zipping & uploading masks...' : 'Uploading masks...');
+      const masksZip = await filesToZipBlob(maskFiles);
+      await uploadToSignedUrl(urls.masks_upload_url, masksZip);
 
       // Step 3: Create finetune job and start
       setTrainingStatus('Starting training on GPU server...');
@@ -251,38 +254,38 @@ function AgentTrainContent() {
 
             {/* Upload images */}
             <div>
-              <label className="block text-xs font-semibold text-foreground/70 mb-2 uppercase tracking-wider">Images (ZIP)</label>
+              <label className="block text-xs font-semibold text-foreground/70 mb-2 uppercase tracking-wider">Images (ZIP or individual files)</label>
               <div
                 onClick={() => imagesRef.current?.click()}
                 onDragOver={(e) => { e.preventDefault(); }}
-                onDrop={(e) => { e.preventDefault(); if (e.dataTransfer.files[0]) setImagesFile(e.dataTransfer.files[0]); }}
+                onDrop={(e) => { e.preventDefault(); if (e.dataTransfer.files.length) setImageFiles(Array.from(e.dataTransfer.files)); }}
                 className="border border-dashed border-border/50 rounded-xl p-5 text-center cursor-pointer hover:border-primary/40 hover:bg-primary/5 transition-all"
               >
                 <Upload size={20} className="mx-auto mb-1 text-muted" />
-                <p className="text-sm text-muted">{imagesFile ? imagesFile.name : 'Click or drag images.zip'}</p>
+                <p className="text-sm text-muted">{imageFiles.length > 0 ? describeFiles(imageFiles) : 'Click or drag images (.zip or .png/.jpg)'}</p>
               </div>
-              <input ref={imagesRef} type="file" accept=".zip" className="hidden" onChange={(e) => setImagesFile(e.target.files?.[0] || null)} />
+              <input ref={imagesRef} type="file" accept={IMAGE_ACCEPT} multiple className="hidden" onChange={(e) => setImageFiles(e.target.files ? Array.from(e.target.files) : [])} />
             </div>
 
             {/* Upload masks */}
             <div>
-              <label className="block text-xs font-semibold text-foreground/70 mb-2 uppercase tracking-wider">Masks (ZIP)</label>
+              <label className="block text-xs font-semibold text-foreground/70 mb-2 uppercase tracking-wider">Masks (ZIP or individual files)</label>
               <div
                 onClick={() => masksRef.current?.click()}
                 onDragOver={(e) => { e.preventDefault(); }}
-                onDrop={(e) => { e.preventDefault(); if (e.dataTransfer.files[0]) setMasksFile(e.dataTransfer.files[0]); }}
+                onDrop={(e) => { e.preventDefault(); if (e.dataTransfer.files.length) setMaskFiles(Array.from(e.dataTransfer.files)); }}
                 className="border border-dashed border-border/50 rounded-xl p-5 text-center cursor-pointer hover:border-primary/40 hover:bg-primary/5 transition-all"
               >
                 <Upload size={20} className="mx-auto mb-1 text-muted" />
-                <p className="text-sm text-muted">{masksFile ? masksFile.name : 'Click or drag masks.zip'}</p>
+                <p className="text-sm text-muted">{maskFiles.length > 0 ? describeFiles(maskFiles) : 'Click or drag masks (.zip, .png, or .txt)'}</p>
               </div>
-              <input ref={masksRef} type="file" accept=".zip" className="hidden" onChange={(e) => setMasksFile(e.target.files?.[0] || null)} />
+              <input ref={masksRef} type="file" accept={MASK_ACCEPT} multiple className="hidden" onChange={(e) => setMaskFiles(e.target.files ? Array.from(e.target.files) : [])} />
             </div>
 
             {/* Start training */}
             <button
               onClick={handleStartTraining}
-              disabled={training || !jobName.trim() || !imagesFile || !masksFile}
+              disabled={training || !jobName.trim() || imageFiles.length === 0 || maskFiles.length === 0}
               className="w-full py-3.5 rounded-xl bg-gradient-to-r from-primary to-success text-white text-sm font-bold hover:brightness-110 disabled:opacity-40 cursor-pointer disabled:cursor-not-allowed transition-all shadow-lg shadow-primary/20 flex items-center justify-center gap-2"
             >
               <Rocket size={16} />
